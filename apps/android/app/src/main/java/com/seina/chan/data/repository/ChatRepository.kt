@@ -343,6 +343,12 @@ class ChatRepository(
      * @return 缓存中的消息列表，如果无缓存则返回空列表
      */
     suspend fun loadCachedMessages(sessionId: String): List<ChatMessage> {
+        // 如果当前会话正在流式接收 AI 回复，跳过缓存覆盖，避免打断实时显示
+        val hasStreaming = _messages.value.any { it.isStreaming && it.role == "assistant" }
+        if (hasStreaming && currentSessionId == sessionId) {
+            FileLogger.i("ChatRepository", "跳过 loadCachedMessages：正在流式接收消息 (sessionId=$sessionId)")
+            return _messages.value
+        }
         currentSessionId = sessionId
         val entities = withContext(Dispatchers.IO) {
             messageDao.getBySessionId(sessionId)

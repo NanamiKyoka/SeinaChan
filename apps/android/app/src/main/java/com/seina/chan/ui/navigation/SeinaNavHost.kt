@@ -1,9 +1,11 @@
 package com.seina.chan.ui.navigation
 
+import androidx.activity.ComponentActivity
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -58,8 +60,9 @@ fun SeinaNavHost(
             )
         ) { backStackEntry ->
             val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
+            val activity = LocalContext.current as ComponentActivity
             ChatScreen(
-                viewModel = hiltViewModel(),
+                viewModel = hiltViewModel(activity),
                 sessionId = sessionId,
                 onBack = { navController.popBackStack() },
                 onReconfigure = {
