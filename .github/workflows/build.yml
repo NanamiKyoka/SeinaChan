@@ -36,13 +36,14 @@ jobs:
 
           BODY="## ${CURRENT_TAG}\n\n"
 
-          FEAT=$(git log ${RANGE} --format="- %s" --grep="^feat")
-          FIX=$(git log ${RANGE} --format="- %s" --grep="^fix")
-          REFACTOR=$(git log ${RANGE} --format="- %s" --grep="^refactor")
-          DOCS=$(git log ${RANGE} --format="- %s" --grep="^docs")
-          TEST=$(git log ${RANGE} --format="- %s" --grep="^test")
-          CHORE=$(git log ${RANGE} --format="- %s" --grep="^chore")
-          OTHER=$(git log ${RANGE} --format="- %s" --grep="^feat" --invert-grep --grep="^fix" --invert-grep --grep="^refactor" --invert-grep --grep="^docs" --invert-grep --grep="^test" --invert-grep --grep="^chore" --invert-grep)
+          # 使用 %B 获取完整提交消息（多行），按行提取 conventional commit 条目
+          FEAT=$(git log ${RANGE} --format="%B" | grep -E '^feat\(' | sed 's/^/- /')
+          FIX=$(git log ${RANGE} --format="%B" | grep -E '^fix\(' | sed 's/^/- /')
+          REFACTOR=$(git log ${RANGE} --format="%B" | grep -E '^refactor\(' | sed 's/^/- /')
+          DOCS=$(git log ${RANGE} --format="%B" | grep -E '^docs\(' | sed 's/^/- /')
+          TEST=$(git log ${RANGE} --format="%B" | grep -E '^test\(' | sed 's/^/- /')
+          CHORE=$(git log ${RANGE} --format="%B" | grep -E '^chore\(' | sed 's/^/- /')
+          OTHER=$(git log ${RANGE} --format="%B" | grep -v '^\s*$' | grep -v -E '^(feat|fix|refactor|docs|test|chore)\(' | sed 's/^/- /')
 
           if [ -n "$FEAT" ]; then BODY="${BODY}### ✨ 新功能\n${FEAT}\n\n"; fi
           if [ -n "$FIX" ]; then BODY="${BODY}### 🐛 修复\n${FIX}\n\n"; fi
