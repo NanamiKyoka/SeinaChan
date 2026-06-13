@@ -39,7 +39,7 @@ cd apps/android
 
 - **compileSdk = 35**, **minSdk = 26**, **targetSdk = 35**
 - **Kotlin 2.0.21**, **AGP 8.7.3**, **Compose BOM 2024.12.01**
-- Aliyun Maven mirrors configured in `settings.gradle.kts` for Chinese network access. No proxy switch needed — they're always-on fallbacks before google/mavenCentral.
+- Uses official `google()` and `mavenCentral()` Maven repositories. Aliyun mirrors are conditionally enabled only when `CI` env var is absent (local builds in China); GitHub Actions sets `CI=true` so CI uses only official sources (Aliyun returns 502 on overseas runners).
 - `org.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8` in `gradle.properties` — Gradle daemon needs sufficient heap.
 - `org.gradle.parallel=true` and `org.gradle.caching=true` are enabled.
 - `kotlin.code.style=official` (no wildcard imports in official style).
@@ -53,7 +53,7 @@ cd apps/android
 | UI | Jetpack Compose + Material3 | `material3` from BOM; adaptive layout + pull-to-refresh |
 | Architecture | MVI + ViewModel + Repository | Unidirectional data flow |
 | DI | Hilt | `hilt-android:2.54` + `hilt-navigation-compose:1.2.0`; uses **kapt**, not KSP |
-| Network | Ktor Client 3.0.3 | OkHttp engine, WebSocket support |
+| Network | Ktor Client 3.0.3 | CIO engine (pure Kotlin), WebSocket support |
 | Serialization | Kotlinx Serialization 1.7.3 | `kotlinx.serialization.json` |
 | Async | Kotlin Coroutines + Flow | StateFlow for UI state, SharedFlow for events |
 | Image loading | Coil 2.6.0 | Compose-native |

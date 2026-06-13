@@ -93,7 +93,7 @@ fun ConnectScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "口袋星奈 v0.1.0",
+                text = "口袋星奈",
                 style = TextStyles.displayLg
             )
 

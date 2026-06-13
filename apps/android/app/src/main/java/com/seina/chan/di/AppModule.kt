@@ -22,7 +22,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.ANDROID
 import io.ktor.client.plugins.logging.LogLevel
@@ -31,7 +32,6 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
-import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 @Module
@@ -47,7 +47,7 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideHttpClient(json: Json): HttpClient = HttpClient(OkHttp) {
+    fun provideHttpClient(json: Json): HttpClient = HttpClient(CIO) {
         install(ContentNegotiation) {
             json(json)
         }
@@ -56,12 +56,10 @@ object AppModule {
             logger = Logger.ANDROID
             level = LogLevel.ALL
         }
-        engine {
-            config {
-                connectTimeout(30_000, TimeUnit.MILLISECONDS)
-                readTimeout(30_000, TimeUnit.MILLISECONDS)
-                pingInterval(20, TimeUnit.SECONDS)
-            }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 30_000
+            connectTimeoutMillis = 30_000
+            socketTimeoutMillis = 30_000
         }
     }
 
