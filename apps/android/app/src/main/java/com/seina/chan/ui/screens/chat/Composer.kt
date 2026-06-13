@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,6 +38,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -244,6 +246,46 @@ fun Composer(
             }
         }
 
+        val filteredCommands = remember(value, slashCommands) {
+            if (value.startsWith("/")) {
+                slashCommands.filter { it.name.startsWith(value, ignoreCase = true) }
+            } else emptyList()
+        }
+
+        if (filteredCommands.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+            ) {
+                items(filteredCommands) { cmd ->
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.clickable { onValueChange(cmd.name + " ") }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = cmd.name,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = cmd.description,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -317,16 +359,6 @@ fun Composer(
             Spacer(modifier = Modifier.width(4.dp))
 
             Box(modifier = Modifier.weight(1f)) {
-                val filteredCommands = remember(value, slashCommands) {
-                    if (value.startsWith("/")) {
-                        slashCommands.filter { it.name.startsWith(value, ignoreCase = true) }
-                    } else emptyList()
-                }
-                var dropdownExpanded by remember { mutableStateOf(false) }
-                LaunchedEffect(filteredCommands) {
-                    dropdownExpanded = filteredCommands.isNotEmpty()
-                }
-
                 OutlinedTextField(
                     value = value,
                     onValueChange = onValueChange,
@@ -351,36 +383,6 @@ fun Composer(
                         unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     )
                 )
-
-                DropdownMenu(
-                    expanded = dropdownExpanded,
-                    onDismissRequest = { dropdownExpanded = false },
-                    modifier = Modifier.fillMaxWidth(),
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                ) {
-                    filteredCommands.forEach { cmd ->
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text(
-                                        text = cmd.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = cmd.description,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            },
-                            onClick = {
-                                onValueChange(cmd.name)
-                                dropdownExpanded = false
-                            }
-                        )
-                    }
-                }
             }
 
             Spacer(modifier = Modifier.width(8.dp))

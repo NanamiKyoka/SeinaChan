@@ -138,8 +138,7 @@ fun SessionListScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .padding(horizontal = Spacing.sm),
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -147,13 +146,6 @@ fun SessionListScreen(
                 text = "会话",
                 style = TextStyles.displaySm
             )
-            IconButton(onClick = onNavigateToSettings) {
-                Icon(
-                    imageVector = Icons.Filled.Settings,
-                    contentDescription = "设置",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
 
         Spacer(modifier = Modifier.height(Spacing.sm))

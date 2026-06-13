@@ -67,6 +67,11 @@ fun ConnectScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var renameTargetId by remember { mutableStateOf("") }
     var renameValue by remember { mutableStateOf("") }
+    var showEditDialog by remember { mutableStateOf(false) }
+    var editTargetProfile by remember { mutableStateOf<ConnectionProfile?>(null) }
+    var editIp by remember { mutableStateOf("") }
+    var editPort by remember { mutableStateOf("") }
+    var editToken by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         viewModel.navigateToChat.collect { success ->
@@ -241,6 +246,13 @@ fun ConnectScreen(
                     ProfileCard(
                         profile = profile,
                         onClick = { viewModel.loadProfile(profile) },
+                        onEdit = {
+                            editTargetProfile = profile
+                            editIp = profile.ip
+                            editPort = profile.port
+                            editToken = profile.token
+                            showEditDialog = true
+                        },
                         onRename = {
                             renameTargetId = profile.id
                             renameValue = profile.name
@@ -350,12 +362,85 @@ fun ConnectScreen(
             }
         )
     }
+
+    if (showEditDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showEditDialog = false
+                editTargetProfile = null
+            },
+            title = { Text("编辑连接配置") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editIp,
+                        onValueChange = { editIp = it },
+                        label = { Text("IP 地址") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = AppShapes.md,
+                        colors = outlinedTextFieldColors()
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.sm))
+                    OutlinedTextField(
+                        value = editPort,
+                        onValueChange = { editPort = it },
+                        label = { Text("端口") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = AppShapes.md,
+                        colors = outlinedTextFieldColors()
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.sm))
+                    OutlinedTextField(
+                        value = editToken,
+                        onValueChange = { editToken = it },
+                        label = { Text("Token (可选)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = AppShapes.md,
+                        colors = outlinedTextFieldColors()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        editTargetProfile?.let { profile ->
+                            viewModel.updateProfile(
+                                profile.copy(
+                                    ip = editIp.trim(),
+                                    port = editPort.trim(),
+                                    token = editToken.trim()
+                                )
+                            )
+                        }
+                        showEditDialog = false
+                        editTargetProfile = null
+                    },
+                    enabled = editIp.isNotBlank() && editPort.isNotBlank()
+                ) {
+                    Text("保存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showEditDialog = false
+                    editTargetProfile = null
+                }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 }
 
 @Composable
 private fun ProfileCard(
     profile: ConnectionProfile,
     onClick: () -> Unit,
+    onEdit: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -404,6 +489,13 @@ private fun ProfileCard(
                     expanded = expanded,
                     onDismissRequest = { expanded = false }
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("编辑") },
+                        onClick = {
+                            expanded = false
+                            onEdit()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("重命名") },
                         onClick = {

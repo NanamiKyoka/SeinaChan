@@ -78,6 +78,8 @@ fun ChatScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    var backPressedTime by remember { mutableStateOf(0L) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     val pendingApproval = remember { mutableStateOf<GatewayEvent.ApprovalRequest?>(null) }
     val pendingClarify = remember { mutableStateOf<GatewayEvent.ClarifyRequest?>(null) }
@@ -216,8 +218,18 @@ fun ChatScreen(
     val title = if (currentSessionId.isEmpty()) "口袋星奈" else currentSessionId.take(8)
 
     // 拦截系统返回键：抽屉打开时关闭抽屉，否则不返回 connect 界面
-    BackHandler(enabled = drawerState.isOpen) {
-        scope.launch { drawerState.close() }
+    BackHandler(enabled = true) {
+        if (drawerState.isOpen) {
+            scope.launch { drawerState.close() }
+        } else {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - backPressedTime < 2000) {
+                onBack()
+            } else {
+                backPressedTime = currentTime
+                android.widget.Toast.makeText(context, "再按一次返回主页", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     ModalNavigationDrawer(

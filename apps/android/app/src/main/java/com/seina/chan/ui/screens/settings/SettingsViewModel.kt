@@ -3,6 +3,8 @@ package com.seina.chan.ui.screens.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.seina.chan.data.remote.HermesApiService
+import com.seina.chan.data.model.ConnectionConfig
+import com.seina.chan.data.model.ConnectionProfile
 import com.seina.chan.data.remote.ModelAssignment
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SettingsRepository
@@ -31,6 +33,7 @@ data class SettingsUiState(
     val connectionIp: String = "",
     val connectionPort: String = "",
     val connectionToken: String = "",
+    val connectionProfiles: List<ConnectionProfile> = emptyList(),
     val hiddenToolNames: Set<String> = emptySet(),
     /** 自定义工具链，格式为 "category|tool_name" */
     val customTools: Set<String> = emptySet(),
@@ -101,6 +104,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.connectionToken.collect { value ->
                 _uiState.update { it.copy(connectionToken = value) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.connectionProfiles.collect { value ->
+                _uiState.update { it.copy(connectionProfiles = value) }
             }
         }
         viewModelScope.launch {
@@ -266,5 +274,18 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             connectionRepository.disconnect()
         }
+    }
+
+    fun saveAndReconnect(ip: String, port: String, token: String) {
+        setConnectionIp(ip)
+        setConnectionPort(port)
+        setConnectionToken(token)
+        viewModelScope.launch {
+            connectionRepository.connect(ConnectionConfig(ip, port, token))
+        }
+    }
+
+    fun loadProfile(profile: ConnectionProfile) {
+        saveAndReconnect(profile.ip, profile.port, profile.token)
     }
 }

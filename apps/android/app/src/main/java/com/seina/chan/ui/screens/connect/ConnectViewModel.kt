@@ -176,7 +176,13 @@ class ConnectViewModel @Inject constructor(
             testStatus = TestStatus.None
         )
         FileLogger.i("ConnectViewModel", "loadProfile() name=${profile.name}")
-        connect()
+    }
+
+    fun updateProfile(profile: ConnectionProfile) {
+        viewModelScope.launch {
+            settingsRepository.updateConnectionProfile(profile)
+            FileLogger.i("ConnectViewModel", "updateProfile() name=${profile.name}")
+        }
     }
 
     fun renameProfile(profileId: String, newName: String) {

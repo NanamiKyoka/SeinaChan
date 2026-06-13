@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.seina.chan.data.model.ConnectionProfile
 import com.seina.chan.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -272,9 +273,7 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(Spacing.md))
                         Button(
                             onClick = {
-                                viewModel.setConnectionIp(ipText)
-                                viewModel.setConnectionPort(portText)
-                                viewModel.setConnectionToken(tokenText)
+                                viewModel.saveAndReconnect(ipText, portText, tokenText)
                             },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(
@@ -282,13 +281,18 @@ fun SettingsScreen(
                             )
                         ) {
                             Text(
-                                text = "保存连接配置",
+                                text = "保存并重连",
                                 color = MaterialTheme.colorScheme.onPrimary
                             )
                         }
                         Spacer(modifier = Modifier.height(Spacing.xs))
                         Button(
-                            onClick = { viewModel.disconnect() },
+                            onClick = { 
+                                viewModel.disconnect()
+                                navController.navigate("connect") {
+                                    popUpTo(0)
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary
@@ -298,6 +302,26 @@ fun SettingsScreen(
                                 text = "断开当前连接",
                                 color = MaterialTheme.colorScheme.onPrimary
                             )
+                        }
+                        
+                        if (uiState.connectionProfiles.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(Spacing.md))
+                            HorizontalDivider()
+                            Spacer(modifier = Modifier.height(Spacing.md))
+                            Text(
+                                text = "已保存的配置",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(Spacing.sm))
+                            uiState.connectionProfiles.forEach { profile ->
+                                ProfileCard(
+                                    profile = profile,
+                                    onClick = { viewModel.loadProfile(profile) }
+                                )
+                                Spacer(modifier = Modifier.height(Spacing.xs))
+                            }
                         }
                     }
                 }
@@ -465,6 +489,39 @@ private fun SettingsSectionCard(
                 )
             }
             content()
+        }
+    }
+}
+
+@Composable
+private fun ProfileCard(
+    profile: ConnectionProfile,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(Spacing.md)
+        ) {
+            Text(
+                text = profile.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(Spacing.xxs))
+            Text(
+                text = "${profile.ip}:${profile.port}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
