@@ -3,7 +3,6 @@ package com.seina.chan.ui.screens.sessions
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.seina.chan.data.model.Session
-import com.seina.chan.data.model.SessionSearchResult
 import com.seina.chan.data.remote.ConnectionState
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SessionRepository
@@ -79,12 +78,6 @@ class SessionListViewModel @Inject constructor(
     private val _hasMore = MutableStateFlow(true)
     val hasMore: StateFlow<Boolean> = _hasMore.asStateFlow()
 
-    private val _searchResults = MutableStateFlow<List<SessionSearchResult>>(emptyList())
-    val searchResults: StateFlow<List<SessionSearchResult>> = _searchResults.asStateFlow()
-
-    private val _isSearching = MutableStateFlow(false)
-    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
-
     // 分页状态
     private var offset = 0
     private var limit = 20
@@ -95,22 +88,13 @@ class SessionListViewModel @Inject constructor(
                 limit = pageSize
             }
         }
+        // 搜索时自动加载所有会话，确保本地过滤可以覆盖全部会话
         viewModelScope.launch {
             searchQuery
                 .debounce(300)
                 .collect { query ->
-                    if (query.isNotBlank()) {
-                        _isSearching.value = true
-                        try {
-                            val results = sessionRepository.searchSessions(query)
-                            _searchResults.value = results
-                        } catch (e: Exception) {
-                            FileLogger.e("SessionListViewModel", "searchSessions() failed", e)
-                        } finally {
-                            _isSearching.value = false
-                        }
-                    } else {
-                        _searchResults.value = emptyList()
+                    if (query.isNotBlank() && _sessions.value.isEmpty()) {
+                        loadAllSessions()
                     }
                 }
         }
@@ -178,6 +162,26 @@ class SessionListViewModel @Inject constructor(
                 _error.value = e.message
             } finally {
                 _isLoadingMore.value = false
+            }
+        }
+    }
+
+    /**
+     * 加载所有会话（用于搜索时确保本地过滤覆盖全部会话）
+     */
+    private fun loadAllSessions() {
+        viewModelScope.launch {
+            var currentOffset = 0
+            while (_hasMore.value) {
+                try {
+                    val result = sessionRepository.fetchSessions(limit = limit, offset = currentOffset)
+                    _sessions.value = _sessions.value + result.sessions
+                    _hasMore.value = result.hasMore
+                    currentOffset += limit
+                } catch (e: Exception) {
+                    FileLogger.e("SessionListViewModel", "loadAllSessions() failed at offset=$currentOffset", e)
+                    break
+                }
             }
         }
     }
