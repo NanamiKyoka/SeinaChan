@@ -58,6 +58,9 @@ class ChatViewModel @Inject constructor(
         }
     private var currentWsSessionId: String = ""
 
+    /** 上次已完成加载的会话 ID，防止 ChatScreen recompose 后同一会话重复触发 loadMessages */
+    private var lastLoadedSessionId: String = ""
+
     private val _navigateToSession = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val navigateToSession: SharedFlow<String> = _navigateToSession.asSharedFlow()
 
@@ -249,6 +252,11 @@ class ChatViewModel @Inject constructor(
     }
 
     suspend fun resumeSessionWithId(storedSessionId: String): Result<String> {
+        // 同一会话已 resume 且 wsSessionId 有效 → 跳过，防止重复发送 session.resume 干扰服务端流式响应
+        if (currentDbSessionId == storedSessionId && currentWsSessionId.isNotEmpty()) {
+            FileLogger.i("ChatViewModel", "resumeSessionWithId() skipped: already resumed for $storedSessionId")
+            return Result.success(currentWsSessionId)
+        }
         currentDbSessionId = storedSessionId
         return try {
             connectionRepository.saveLastDbSessionId(currentDbSessionId)
@@ -447,8 +455,17 @@ class ChatViewModel @Inject constructor(
             _inputState.update { it.copy(error = "sessionId is empty, cannot load messages") }
             return
         }
+        // 同一会话已加载过 → 跳过，防止 ChatScreen recompose 时用服务端/缓存数据覆盖实时流式消息
+        if (lastLoadedSessionId == dbSessionId) {
+            FileLogger.i("ChatViewModel", "loadMessages() skipped: already loaded for dbSessionId=$dbSessionId")
+            return
+        }
+        val isSessionSwitch = currentDbSessionId != dbSessionId
         currentDbSessionId = dbSessionId
-        currentWsSessionId = ""
+        // 仅切换会话时才重置 wsSessionId，同会话重建时保留以支持 resumeSessionWithId 跳过
+        if (isSessionSwitch) {
+            currentWsSessionId = ""
+        }
         viewModelScope.launch {
             try {
                 connectionRepository.saveLastDbSessionId(currentDbSessionId)
@@ -478,13 +495,14 @@ class ChatViewModel @Inject constructor(
                 FileLogger.i("ChatViewModel", "loadMessages() fetched ${history.size} messages from server")
                 chatRepository.setMessages(history)
                 _inputState.update { it.copy(isLoading = false, error = null) }
+                lastLoadedSessionId = dbSessionId
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "loadMessages() server fetch failed", e)
-                // 如果缓存为空且服务端也失败，显示错误
+                // 即使服务端拉取失败也标记为已加载，避免后续 recompose 时重复请求
+                lastLoadedSessionId = dbSessionId
                 if (chatRepository.messages.value.isEmpty()) {
                     _inputState.update { it.copy(isLoading = false, error = "加载历史消息失败: ${e.message}") }
                 } else {
-                    // 有缓存时仅降级提示，不覆盖已展示的内容
                     _inputState.update { it.copy(isLoading = false) }
                 }
             }
