@@ -4,6 +4,7 @@ import com.seina.chan.data.local.dao.SentImageDao
 import com.seina.chan.data.local.entity.SentImageEntity
 import com.seina.chan.data.model.ChatMessage
 import com.seina.chan.data.model.Session
+import com.seina.chan.data.model.SessionSearchResult
 import com.seina.chan.data.model.ToolCallDetail
 import com.seina.chan.data.model.ToolCallStatus
 import com.seina.chan.data.remote.HermesApiService
@@ -279,5 +280,46 @@ class SessionRepository(
         FileLogger.i("SessionRepository", "renameSession() sessionId=$sessionId, title=$title")
         apiService.renameSession(sessionId, title)
         FileLogger.i("SessionRepository", "renameSession() succeeded")
+    }
+
+    suspend fun undoSession() {
+        FileLogger.i("SessionRepository", "undoSession()")
+        wsClient.request(HermesMethods.SESSION_UNDO)
+        FileLogger.i("SessionRepository", "undoSession() succeeded")
+    }
+
+    suspend fun compressSession() {
+        FileLogger.i("SessionRepository", "compressSession()")
+        wsClient.request(HermesMethods.SESSION_COMPRESS)
+        FileLogger.i("SessionRepository", "compressSession() succeeded")
+    }
+
+    suspend fun branchFromMessage(messageId: String): String? {
+        FileLogger.i("SessionRepository", "branchFromMessage() messageId=$messageId")
+        val params = buildJsonObject {
+            put("message_id", messageId)
+        }
+        val result = wsClient.request(HermesMethods.SESSION_BRANCH, params)
+        val newSessionId = when {
+            result is JsonObject && result.containsKey("session_id") -> result["session_id"]!!.jsonPrimitive.content
+            result is JsonObject && result.containsKey("id") -> result["id"]!!.jsonPrimitive.content
+            result is JsonObject && result.containsKey("sessionId") -> result["sessionId"]!!.jsonPrimitive.content
+            else -> null
+        }
+        FileLogger.i("SessionRepository", "branchFromMessage() result=$newSessionId")
+        return newSessionId
+    }
+
+    suspend fun searchSessions(query: String): List<SessionSearchResult> {
+        FileLogger.i("SessionRepository", "searchSessions() query=$query")
+        val response = apiService.searchSessions(query)
+        return response.sessions.map {
+            SessionSearchResult(
+                sessionId = it.id,
+                title = it.title,
+                previewSnippet = it.snippet ?: it.preview,
+                matchedKeyword = it.keyword
+            )
+        }
     }
 }

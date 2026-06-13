@@ -100,6 +100,23 @@ data class RenameResponse(
     val title: String? = null
 )
 
+@Serializable
+data class SessionSearchResultDto(
+    val id: String,
+    val title: String? = null,
+    val preview: String? = null,
+    val snippet: String? = null,
+    val keyword: String? = null,
+    @SerialName("message_count") val messageCount: Int = 0,
+    @SerialName("last_active") val lastActiveAt: Double? = null
+)
+
+@Serializable
+data class SessionsSearchResponse(
+    val sessions: List<SessionSearchResultDto> = emptyList(),
+    val total: Int = 0
+)
+
 class HermesApiService(
     private val client: HttpClient
 ) {
@@ -182,4 +199,7 @@ class HermesApiService(
 
     suspend fun renameSession(sessionId: String, title: String): RenameResponse =
         patch("/api/sessions/$sessionId", mapOf("title" to title))
+
+    suspend fun searchSessions(query: String): SessionsSearchResponse =
+        get("/api/sessions/search?q=${query}")
 }

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,6 +71,9 @@ fun ChatScreen(
     onNavigateToSettings: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val slashCommands by viewModel.slashCommands.collectAsStateWithLifecycle()
+    val editingMessage by viewModel.editingMessage.collectAsStateWithLifecycle()
+    val isStreaming = uiState.messages.any { it.isStreaming }
     var currentSessionId by rememberSaveable { mutableStateOf(sessionId) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -125,6 +129,16 @@ fun ChatScreen(
                 is GatewayEvent.SecretRequest -> pendingSecret.value = event
                 else -> Unit
             }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadSlashCommands()
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.navigateToSession.collect { sessionId ->
+            currentSessionId = sessionId
         }
     }
 
@@ -272,6 +286,15 @@ fun ChatScreen(
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.weight(1f))
+                    if (isStreaming) {
+                        IconButton(onClick = { viewModel.stopGenerating() }) {
+                            Icon(
+                                imageVector = Icons.Default.Stop,
+                                contentDescription = "停止生成",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     IconButton(onClick = { viewModel.toggleSearchMode() }) {
                         Icon(
                             imageVector = Icons.Default.Search,
@@ -375,7 +398,9 @@ fun ChatScreen(
                                 hiddenToolNames = uiState.hiddenToolNames,
                                 onImageClick = { previewImageUri = it },
                                 onQuote = { viewModel.quoteMessage(it) },
-                                onResend = { viewModel.resendMessage(it) }
+                                onResend = { viewModel.resendMessage(it) },
+                                onEdit = { viewModel.startEditingMessage(it) },
+                                onBranch = { viewModel.branchFromMessage(it.id) }
                             )
                         }
                     }
@@ -437,12 +462,40 @@ fun ChatScreen(
                 }
             }
 
+            // Editing banner
+            if (editingMessage != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.md, vertical = Spacing.xs)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), shape = MaterialTheme.shapes.medium)
+                        .padding(Spacing.md),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "编辑消息",
+                        style = TextStyles.bodySm,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "取消",
+                        style = TextStyles.bodySm.copy(
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        ),
+                        modifier = Modifier.clickable { viewModel.cancelEditing() }
+                    )
+                }
+            }
+
             // Composer
             Composer(
                 value = uiState.currentInput,
                 onValueChange = viewModel::onInputChange,
                 onSend = viewModel::sendMessage,
                 sendEnabled = uiState.canSend,
+                slashCommands = slashCommands,
                 selectedImages = uiState.selectedImages,
                 onImagesSelected = viewModel::onImagesSelected,
                 onRemoveImage = viewModel::removeSelectedImage,
@@ -452,7 +505,9 @@ fun ChatScreen(
                 onRemoveVideo = viewModel::removeSelectedVideo,
                 selectedFiles = uiState.selectedFiles,
                 onFileSelected = viewModel::onFileSelected,
-                onRemoveFile = viewModel::removeSelectedFile
+                onRemoveFile = viewModel::removeSelectedFile,
+                editingMessage = editingMessage,
+                onCancelEdit = viewModel::cancelEditing
             )
         }
     }

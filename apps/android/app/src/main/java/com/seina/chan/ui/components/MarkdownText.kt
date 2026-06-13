@@ -37,6 +37,19 @@ import com.seina.chan.ui.theme.CodeBg
 import com.seina.chan.ui.theme.CodeText
 import com.seina.chan.ui.theme.Primary
 import com.seina.chan.ui.theme.TextStyles
+import android.content.ClipboardManager
+import android.content.ClipData
+import android.content.Context
+import android.net.Uri
+import android.widget.Toast
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 
 // === Markdown 解析数据模型 ===
 
@@ -447,10 +460,22 @@ fun MarkdownText(
                 is MarkdownSegment.CodeBlock -> CodeBlockView(segment)
                 is MarkdownSegment.Paragraph -> {
                     val annotatedString = buildInlineAnnotatedString(segment.spans, color)
-                    Text(
+                    val context = LocalContext.current
+                    ClickableText(
                         text = annotatedString,
-                        style = style,
-                        color = color
+                        style = style.copy(color = color),
+                        onClick = { offset ->
+                            annotatedString.getStringAnnotations(tag = "URL", start = offset, end = offset)
+                                .firstOrNull()?.let { annotation ->
+                                    val url = annotation.item
+                                    if (url.startsWith("http://") || url.startsWith("https://")) {
+                                        try {
+                                            CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url))
+                                        } catch (_: Exception) {
+                                        }
+                                    }
+                                }
+                        }
                     )
                 }
                 is MarkdownSegment.Table -> TableView(segment)
@@ -489,6 +514,22 @@ private fun CodeBlockView(codeBlock: MarkdownSegment.CodeBlock) {
                 text = highlighted,
                 style = TextStyles.code,
                 modifier = Modifier.fillMaxWidth()
+            )
+        }
+        val context = LocalContext.current
+        IconButton(
+            onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("code", codeBlock.code)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            Icon(
+                imageVector = Icons.Default.ContentCopy,
+                contentDescription = "复制代码",
+                tint = CodeText.copy(alpha = 0.6f)
             )
         }
     }

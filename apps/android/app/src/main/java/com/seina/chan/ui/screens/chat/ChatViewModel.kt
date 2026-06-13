@@ -11,17 +11,27 @@ import com.seina.chan.data.repository.ChatRepository
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SessionRepository
 import com.seina.chan.data.repository.SettingsRepository
+import com.seina.chan.service.ServiceSessionTracker
 import com.seina.chan.util.FileLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.seina.chan.data.model.SlashCommand
+import com.seina.chan.data.remote.HermesMethods
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
@@ -35,8 +45,21 @@ class ChatViewModel @Inject constructor(
 
     private val _inputState = MutableStateFlow(ChatUiState())
 
+    private val _slashCommands = MutableStateFlow<List<SlashCommand>>(emptyList())
+    val slashCommands: StateFlow<List<SlashCommand>> = _slashCommands
+
+    private val _editingMessage = MutableStateFlow<ChatMessage?>(null)
+    val editingMessage: StateFlow<ChatMessage?> = _editingMessage.asStateFlow()
+
     private var currentDbSessionId: String = ""
+        set(value) {
+            field = value
+            ServiceSessionTracker.setSessionId(value)
+        }
     private var currentWsSessionId: String = ""
+
+    private val _navigateToSession = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val navigateToSession: SharedFlow<String> = _navigateToSession.asSharedFlow()
 
     val events = chatRepository.events
 
@@ -153,6 +176,36 @@ class ChatViewModel @Inject constructor(
 
     fun clearSearch() {
         _inputState.update { it.copy(isSearchMode = false, searchQuery = "", searchFilterUserOnly = false) }
+    }
+
+    fun stopGenerating() {
+        viewModelScope.launch {
+            try {
+                chatRepository.stopGenerating()
+            } catch (e: Exception) {
+                FileLogger.e("ChatViewModel", "stopGenerating() failed", e)
+            }
+        }
+    }
+
+    fun startEditingMessage(message: ChatMessage) {
+        if (message.role != "user") return
+        _editingMessage.value = message
+        viewModelScope.launch {
+            try {
+                chatRepository.deleteMessageAndAfter(message.id)
+                _inputState.update { it.copy(currentInput = message.content) }
+                FileLogger.i("ChatViewModel", "startEditingMessage() id=${message.id}")
+            } catch (e: Exception) {
+                FileLogger.e("ChatViewModel", "startEditingMessage() failed", e)
+                _editingMessage.value = null
+            }
+        }
+    }
+
+    fun cancelEditing() {
+        _editingMessage.value = null
+        _inputState.update { it.copy(currentInput = "") }
     }
 
     fun resendMessage(content: String) {
@@ -281,6 +334,7 @@ class ChatViewModel @Inject constructor(
                     chatRepository.submitPrompt(currentWsSessionId)
                 }
                 clearQuote()
+                _editingMessage.value = null
                 _inputState.update { it.copy(currentInput = "", isLoading = false) }
                 FileLogger.i("ChatViewModel", "sendMessage() succeeded")
             } catch (e: Exception) {
@@ -361,6 +415,28 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "sendImage() failed", e)
                 _inputState.update { it.copy(isLoading = false, error = e.message) }
+            }
+        }
+    }
+
+    fun loadSlashCommands() {
+        viewModelScope.launch {
+            try {
+                val result = wsClient.request(HermesMethods.COMMANDS_CATALOG)
+                val obj = result.jsonObject
+                val pairs = obj["pairs"]?.jsonArray ?: return@launch
+                val commands = pairs.mapNotNull { element ->
+                    val arr = element.jsonArray
+                    if (arr.size >= 2) {
+                        val name = arr[0].jsonPrimitive.content
+                        val desc = arr[1].jsonPrimitive.content
+                        SlashCommand(name, desc)
+                    } else null
+                }
+                _slashCommands.value = commands
+                FileLogger.i("ChatViewModel", "Loaded ${commands.size} slash commands")
+            } catch (e: Exception) {
+                FileLogger.w("ChatViewModel", "Failed to load slash commands: ${e.message}")
             }
         }
     }
@@ -448,6 +524,29 @@ class ChatViewModel @Inject constructor(
                 chatRepository.respondSecret(requestId, secret)
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "respondSecret() failed", e)
+                _inputState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
+    fun branchFromMessage(messageId: String) {
+        FileLogger.i("ChatViewModel", "branchFromMessage() messageId=$messageId")
+        viewModelScope.launch {
+            try {
+                val newSessionId = sessionRepository.branchFromMessage(messageId)
+                if (!newSessionId.isNullOrEmpty()) {
+                    currentDbSessionId = newSessionId
+                    currentWsSessionId = newSessionId
+                    try {
+                        connectionRepository.saveLastDbSessionId(currentDbSessionId)
+                    } catch (e: Exception) {
+                        FileLogger.w("ChatViewModel", "branchFromMessage() failed to save dbSessionId: ${e.message}")
+                    }
+                    _navigateToSession.tryEmit(newSessionId)
+                    FileLogger.i("ChatViewModel", "branchFromMessage() navigated to newSessionId=$newSessionId")
+                }
+            } catch (e: Exception) {
+                FileLogger.e("ChatViewModel", "branchFromMessage() failed", e)
                 _inputState.update { it.copy(error = e.message) }
             }
         }

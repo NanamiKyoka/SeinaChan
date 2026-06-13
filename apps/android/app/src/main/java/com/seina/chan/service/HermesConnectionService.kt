@@ -10,6 +10,7 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.seina.chan.AppForegroundTracker
 import com.seina.chan.MainActivity
 import com.seina.chan.data.remote.ConnectionState
 import com.seina.chan.data.remote.GatewayEvent
@@ -35,6 +36,9 @@ class HermesConnectionService : Service() {
 
     // 应用是否在前台
     private var isAppInForeground = false
+
+    // 当前会话 ID，用于通知跳转
+    private var currentSessionId = ""
 
     // 协程 Job 引用，用于防止重复启动
     private var stateCollectJob: Job? = null
@@ -66,6 +70,9 @@ class HermesConnectionService : Service() {
                 FileLogger.i("HermesConnectionService", "应用进入后台")
                 wsClient.enableReconnect(true)
             }
+            ACTION_SET_SESSION_ID -> {
+                currentSessionId = intent.getStringExtra(EXTRA_SESSION_ID) ?: ""
+            }
             ACTION_ENSURE_CONNECTION -> {
                 ensureConnection()
             }
@@ -93,8 +100,22 @@ class HermesConnectionService : Service() {
         // 启动事件收集，用于后台消息通知（防止重复）
         if (eventsCollectJob?.isActive != true) {
             eventsCollectJob = wsClient.events.onEach { event ->
-                if (event is GatewayEvent.MessageStart && !isAppInForeground) {
-                    showNewMessageNotification()
+                if (!AppForegroundTracker.isForeground.value) {
+                    when (event) {
+                        is GatewayEvent.MessageComplete -> {
+                            showEventNotification("新消息", event.text.take(100), "message.complete")
+                        }
+                        is GatewayEvent.ApprovalRequest -> {
+                            showEventNotification("需要审批", "工具: ${event.toolName}", "approval.request")
+                        }
+                        is GatewayEvent.ClarifyRequest -> {
+                            showEventNotification("需要澄清", event.question, "clarify.request")
+                        }
+                        is GatewayEvent.SecretRequest -> {
+                            showEventNotification("需要密钥", event.prompt, "secret.request")
+                        }
+                        else -> Unit
+                    }
                 }
             }.launchIn(scope)
         }
@@ -121,28 +142,39 @@ class HermesConnectionService : Service() {
                 description = "当 AI 助手返回新消息时提醒"
             }
             manager.createNotificationChannel(aiChannel)
+
+            val eventsChannel = NotificationChannel(
+                CHANNEL_ID_EVENTS,
+                "消息通知",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Hermes 事件通知"
+            }
+            manager.createNotificationChannel(eventsChannel)
         }
     }
 
-    private fun showNewMessageNotification() {
+    private fun showEventNotification(title: String, content: String, eventType: String) {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("sessionId", currentSessionId)
+            putExtra("eventType", eventType)
         }
         val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
+            this, eventType.hashCode(), intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID_AI_MESSAGES)
-            .setContentTitle("口袋星奈")
-            .setContentText("收到新的回复")
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID_EVENTS)
+            .setContentTitle(title)
+            .setContentText(content)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
 
         val manager = getSystemService(NotificationManager::class.java)
-        manager?.notify(NOTIFICATION_ID_MESSAGE, notification)
+        manager?.notify(NOTIFICATION_ID_EVENTS, notification)
     }
 
     private fun buildKeepAliveNotification(): android.app.Notification {
@@ -174,9 +206,13 @@ class HermesConnectionService : Service() {
         private const val NOTIFICATION_ID_KEEPALIVE = 1
         private const val CHANNEL_ID_AI_MESSAGES = "ai_messages"
         private const val NOTIFICATION_ID_MESSAGE = 2
+        private const val CHANNEL_ID_EVENTS = "hermes_events"
+        private const val NOTIFICATION_ID_EVENTS = 3
 
         const val ACTION_APP_FOREGROUND = "APP_FOREGROUND"
         const val ACTION_APP_BACKGROUND = "APP_BACKGROUND"
         const val ACTION_ENSURE_CONNECTION = "ENSURE_CONNECTION"
+        const val ACTION_SET_SESSION_ID = "SET_SESSION_ID"
+        const val EXTRA_SESSION_ID = "session_id"
     }
 }

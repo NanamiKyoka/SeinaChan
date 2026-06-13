@@ -18,7 +18,11 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.seina.chan.data.repository.SettingsRepository
 import com.seina.chan.service.HermesConnectionService
@@ -27,6 +31,7 @@ import com.seina.chan.ui.navigation.SeinaNavHost
 import com.seina.chan.ui.theme.SeinaChanTheme
 import com.seina.chan.util.FileLogger
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableSharedFlow
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -35,6 +40,8 @@ class MainActivity : ComponentActivity() {
 
     private var connectionService: HermesConnectionService? = null
     private var serviceBound = false
+    private var navController: NavHostController? = null
+    private val _navigateToChatEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -52,6 +59,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         bindHermesService()
+        setupProcessLifecycleObserver()
+        handleIntent(intent)
         setContent {
             val themeMode by settingsRepository.themeMode.collectAsStateWithLifecycle(initialValue = "system")
             val darkTheme = when (themeMode) {
@@ -61,15 +70,17 @@ class MainActivity : ComponentActivity() {
             }
             SeinaChanTheme(darkTheme = darkTheme) {
                 val snackbarHostState = remember { SnackbarHostState() }
-                val navController = rememberNavController()
+                val navControllerLocal = rememberNavController()
+                navController = navControllerLocal
 
                 Scaffold(
                     snackbarHost = { SeinaSnackbarHost(snackbarHostState) },
                     contentWindowInsets = WindowInsets.navigationBars
                 ) { innerPadding ->
                     SeinaNavHost(
-                        navController = navController,
+                        navController = navControllerLocal,
                         snackbarHostState = snackbarHostState,
+                        navigateToChatEvent = _navigateToChatEvent,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -108,6 +119,30 @@ class MainActivity : ComponentActivity() {
             action = HermesConnectionService.ACTION_APP_BACKGROUND
         }
         startService(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun setupProcessLifecycleObserver() {
+        ProcessLifecycleOwner.get().lifecycle.addObserver(
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START -> AppForegroundTracker.setForeground(true)
+                    Lifecycle.Event.ON_STOP -> AppForegroundTracker.setForeground(false)
+                    else -> Unit
+                }
+            }
+        )
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val sessionId = intent?.getStringExtra("sessionId") ?: return
+        val eventType = intent.getStringExtra("eventType")
+        FileLogger.i("MainActivity", "handleIntent sessionId=$sessionId, eventType=$eventType")
+        _navigateToChatEvent.tryEmit(sessionId)
     }
 
     override fun onDestroy() {

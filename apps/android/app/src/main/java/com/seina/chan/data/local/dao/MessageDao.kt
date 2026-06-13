@@ -22,4 +22,7 @@ interface MessageDao {
 
     @Query("DELETE FROM messages WHERE createdAt < :timestamp")
     suspend fun deleteOlderThan(timestamp: Long)
+
+    @Query("DELETE FROM messages WHERE sessionId = :sessionId AND createdAt >= :createdAt")
+    suspend fun deleteBySessionIdAndCreatedAtAfter(sessionId: String, createdAt: Long)
 }

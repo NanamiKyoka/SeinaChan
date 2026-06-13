@@ -39,6 +39,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +52,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.seina.chan.data.model.ChatMessage
+import com.seina.chan.data.model.SlashCommand
 import com.seina.chan.ui.theme.AppShapes
 import com.seina.chan.ui.theme.Spacing
 
@@ -70,8 +73,16 @@ fun Composer(
     onRemoveVideo: () -> Unit = {},
     selectedFiles: List<Uri> = emptyList(),
     onFileSelected: (Uri) -> Unit = {},
-    onRemoveFile: (Uri) -> Unit = {}
+    onRemoveFile: (Uri) -> Unit = {},
+    slashCommands: List<SlashCommand> = emptyList(),
+    editingMessage: ChatMessage? = null,
+    onCancelEdit: () -> Unit = {}
 ) {
+    LaunchedEffect(editingMessage) {
+        if (editingMessage != null) {
+            onValueChange(editingMessage.content)
+        }
+    }
     // 多图选择器启动器
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -305,30 +316,72 @@ fun Composer(
             }
             Spacer(modifier = Modifier.width(4.dp))
 
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 48.dp),
-                enabled = inputEnabled,
-                placeholder = { Text("说点什么…") },
-                maxLines = 5,
-                shape = AppShapes.md,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { if (sendEnabled) onSend() }),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.background,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.background,
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                    focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                    unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                    cursorColor = MaterialTheme.colorScheme.primary,
-                    focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            Box(modifier = Modifier.weight(1f)) {
+                val filteredCommands = remember(value, slashCommands) {
+                    if (value.startsWith("/")) {
+                        slashCommands.filter { it.name.startsWith(value, ignoreCase = true) }
+                    } else emptyList()
+                }
+                var dropdownExpanded by remember { mutableStateOf(false) }
+                LaunchedEffect(filteredCommands) {
+                    dropdownExpanded = filteredCommands.isNotEmpty()
+                }
+
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp),
+                    enabled = inputEnabled,
+                    placeholder = { Text("说点什么…") },
+                    maxLines = 5,
+                    shape = AppShapes.md,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { if (sendEnabled) onSend() }),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.background,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    )
                 )
-            )
+
+                DropdownMenu(
+                    expanded = dropdownExpanded,
+                    onDismissRequest = { dropdownExpanded = false },
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                ) {
+                    filteredCommands.forEach { cmd ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(
+                                        text = cmd.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = cmd.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            onClick = {
+                                onValueChange(cmd.name)
+                                dropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.width(8.dp))
 

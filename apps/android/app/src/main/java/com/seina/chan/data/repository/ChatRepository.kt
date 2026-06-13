@@ -301,6 +301,28 @@ class ChatRepository(
         wsClient.request(HermesMethods.SECRET_RESPOND, params)
     }
 
+    suspend fun stopGenerating() {
+        FileLogger.i("ChatRepository", "stopGenerating() called")
+        try {
+            wsClient.request(HermesMethods.SESSION_INTERRUPT, buildJsonObject {})
+            FileLogger.i("ChatRepository", "stopGenerating() succeeded")
+        } catch (e: Exception) {
+            FileLogger.e("ChatRepository", "stopGenerating() failed", e)
+        }
+    }
+
+    suspend fun deleteMessageAndAfter(messageId: String) {
+        val sid = currentSessionId ?: return
+        val message = _messages.value.find { it.id == messageId } ?: return
+        val createdAt = message.createdAt
+        FileLogger.i("ChatRepository", "deleteMessageAndAfter() messageId=$messageId, createdAt=$createdAt, sessionId=$sid")
+        withContext(Dispatchers.IO) {
+            messageDao.deleteBySessionIdAndCreatedAtAfter(sid, createdAt)
+        }
+        _messages.value = _messages.value.filter { it.createdAt < createdAt }
+        FileLogger.i("ChatRepository", "deleteMessageAndAfter() completed, remaining messages=${_messages.value.size}")
+    }
+
     fun clearMessages() {
         _messages.value = emptyList()
     }

@@ -3,6 +3,7 @@ package com.seina.chan.ui.screens.sessions
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.seina.chan.data.model.Session
+import com.seina.chan.data.model.SessionSearchResult
 import com.seina.chan.data.remote.ConnectionState
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SessionRepository
@@ -17,10 +18,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.FlowPreview
 import javax.inject.Inject
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class SessionListViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
@@ -75,6 +79,12 @@ class SessionListViewModel @Inject constructor(
     private val _hasMore = MutableStateFlow(true)
     val hasMore: StateFlow<Boolean> = _hasMore.asStateFlow()
 
+    private val _searchResults = MutableStateFlow<List<SessionSearchResult>>(emptyList())
+    val searchResults: StateFlow<List<SessionSearchResult>> = _searchResults.asStateFlow()
+
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
+
     // 分页状态
     private var offset = 0
     private var limit = 20
@@ -84,6 +94,25 @@ class SessionListViewModel @Inject constructor(
             settingsRepository.pageSize.collect { pageSize ->
                 limit = pageSize
             }
+        }
+        viewModelScope.launch {
+            searchQuery
+                .debounce(300)
+                .collect { query ->
+                    if (query.isNotBlank()) {
+                        _isSearching.value = true
+                        try {
+                            val results = sessionRepository.searchSessions(query)
+                            _searchResults.value = results
+                        } catch (e: Exception) {
+                            FileLogger.e("SessionListViewModel", "searchSessions() failed", e)
+                        } finally {
+                            _isSearching.value = false
+                        }
+                    } else {
+                        _searchResults.value = emptyList()
+                    }
+                }
         }
     }
 
@@ -208,6 +237,34 @@ class SessionListViewModel @Inject constructor(
                 loadSessions(refresh = true)
             } catch (e: Exception) {
                 FileLogger.e("SessionListViewModel", "renameSession() failed", e)
+            }
+        }
+    }
+
+    fun undoSession(sessionId: String) {
+        viewModelScope.launch {
+            FileLogger.i("SessionListViewModel", "undoSession() id=$sessionId")
+            try {
+                sessionRepository.resumeSession(sessionId)
+                sessionRepository.undoSession()
+                FileLogger.i("SessionListViewModel", "undoSession() succeeded")
+                loadSessions(refresh = true)
+            } catch (e: Exception) {
+                FileLogger.e("SessionListViewModel", "undoSession() failed", e)
+            }
+        }
+    }
+
+    fun compressSession(sessionId: String) {
+        viewModelScope.launch {
+            FileLogger.i("SessionListViewModel", "compressSession() id=$sessionId")
+            try {
+                sessionRepository.resumeSession(sessionId)
+                sessionRepository.compressSession()
+                FileLogger.i("SessionListViewModel", "compressSession() succeeded")
+                loadSessions(refresh = true)
+            } catch (e: Exception) {
+                FileLogger.e("SessionListViewModel", "compressSession() failed", e)
             }
         }
     }

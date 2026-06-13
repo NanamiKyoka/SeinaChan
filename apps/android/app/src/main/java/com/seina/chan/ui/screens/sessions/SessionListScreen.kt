@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -64,6 +66,8 @@ fun SessionListScreen(
 ) {
     val sessions by viewModel.filteredSessions.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
     val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
     val globalEventViewModel = hiltViewModel<GlobalEventViewModel>()
     val stableConnectionState by globalEventViewModel.stableConnectionState.collectAsStateWithLifecycle()
@@ -154,14 +158,34 @@ fun SessionListScreen(
 
         Spacer(modifier = Modifier.height(Spacing.sm))
 
-        SeinaTextField(
-            value = searchQuery,
-            onValueChange = { viewModel.searchQuery.value = it },
-            placeholder = "搜索会话...",
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.sm)
-        )
+                .padding(horizontal = Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "搜索",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = Spacing.xs)
+            )
+            SeinaTextField(
+                value = searchQuery,
+                onValueChange = { viewModel.searchQuery.value = it },
+                placeholder = "搜索会话...",
+                modifier = Modifier.weight(1f)
+            )
+            if (searchQuery.isNotEmpty()) {
+                IconButton(onClick = { viewModel.searchQuery.value = "" }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "清除",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(Spacing.sm))
 
@@ -188,7 +212,10 @@ fun SessionListScreen(
             state = pullToRefreshState,
             modifier = Modifier.fillMaxSize()
         ) {
-            if (sessions.isEmpty() && !isLoading && !isRefreshing) {
+            val isSearchActive = searchQuery.isNotEmpty()
+            val displaySessions = if (isSearchActive) searchResults else sessions
+
+            if (displaySessions.isEmpty() && !isLoading && !isRefreshing && !isSearching) {
                 // 空状态提示
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -197,14 +224,21 @@ fun SessionListScreen(
                     Text(
                         text = when {
                             error != null -> "加载失败: $error"
-                            searchQuery.isNotEmpty() -> "未找到匹配会话"
+                            isSearchActive -> "未找到匹配会话"
                             else -> "暂无历史会话"
                         },
                         style = TextStyles.bodyMd,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            } else if (sessions.isEmpty() && isLoading) {
+            } else if (isSearching) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            } else if (displaySessions.isEmpty() && isLoading) {
                 // 初始加载中
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -220,79 +254,101 @@ fun SessionListScreen(
                         contentPadding = PaddingValues(vertical = Spacing.sm),
                         verticalArrangement = Arrangement.spacedBy(Spacing.xs)
                     ) {
-                        items(sessions.size) { index ->
-                            val session = sessions[index]
-                            Box {
+                        if (isSearchActive) {
+                            items(searchResults.size) { index ->
+                                val result = searchResults[index]
                                 SessionListItem(
-                                    session = session,
-                                    isSelected = session.id == selectedSessionId,
-                                    isLast = index == sessions.lastIndex,
-                                    onClick = { viewModel.selectSession(session.id) },
-                                    onLongClick = {
-                                        menuSession = session
-                                        showMenu = true
-                                    }
+                                    session = Session(
+                                        id = result.sessionId,
+                                        title = result.title,
+                                        preview = result.previewSnippet,
+                                        messageCount = 0,
+                                        lastActiveAt = null
+                                    ),
+                                    isSelected = result.sessionId == selectedSessionId,
+                                    isLast = index == searchResults.lastIndex,
+                                    onClick = { onSessionSelected(result.sessionId) }
                                 )
-                                DropdownMenu(
-                                    expanded = showMenu && menuSession?.id == session.id,
-                                    onDismissRequest = { showMenu = false }
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("重命名") },
-                                        onClick = {
-                                            renameSession = menuSession
-                                            renameText = menuSession?.title ?: ""
-                                            showMenu = false
-                                        }
+                            }
+                        } else {
+                            items(sessions.size) { index ->
+                                val session = sessions[index]
+                                Box {
+                                    SessionListItem(
+                                        session = session,
+                                        isSelected = session.id == selectedSessionId,
+                                        isLast = index == sessions.lastIndex,
+                                        onClick = { viewModel.selectSession(session.id) },
+                                        onLongClick = {
+                                            menuSession = session
+                                            showMenu = true
+                                        },
+                                        onUndo = { viewModel.undoSession(session.id) },
+                                        onCompress = { viewModel.compressSession(session.id) }
                                     )
-                                    DropdownMenuItem(
-                                        text = { Text("删除") },
-                                        onClick = {
-                                            menuSession?.let { viewModel.deleteSession(it.id) }
-                                            showMenu = false
-                                        }
-                                    )
+                                    DropdownMenu(
+                                        expanded = showMenu && menuSession?.id == session.id,
+                                        onDismissRequest = { showMenu = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("重命名") },
+                                            onClick = {
+                                                renameSession = menuSession
+                                                renameText = menuSession?.title ?: ""
+                                                showMenu = false
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("删除") },
+                                            onClick = {
+                                                menuSession?.let { viewModel.deleteSession(it.id) }
+                                                showMenu = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        // 底部加载指示器或加载更多按钮
-                        if (isLoadingMore) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = Spacing.md),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            // 底部加载指示器或加载更多按钮
+                            if (isLoadingMore) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = Spacing.md),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                                    }
                                 }
-                            }
-                        } else if (hasMore) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = Spacing.md),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    SeinaButton(
-                                        text = "加载更多",
-                                        onClick = { viewModel.loadMore() },
-                                        variant = SeinaButtonVariant.Secondary,
-                                        compact = true
-                                    )
+                            } else if (hasMore) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = Spacing.md),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        SeinaButton(
+                                            text = "加载更多",
+                                            onClick = { viewModel.loadMore() },
+                                            variant = SeinaButtonVariant.Secondary,
+                                            compact = true
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
 
-                    VerticalScrollbar(
-                        state = listState,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .zIndex(1f)
-                    )
+                    if (!isSearchActive) {
+                        VerticalScrollbar(
+                            state = listState,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .zIndex(1f)
+                        )
+                    }
                 }
             }
         }

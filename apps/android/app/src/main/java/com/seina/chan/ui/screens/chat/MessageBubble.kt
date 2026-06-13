@@ -67,7 +67,9 @@ fun MessageBubble(
     hiddenToolNames: Set<String> = emptySet(),
     onImageClick: ((String) -> Unit)? = null,
     onQuote: ((ChatMessage) -> Unit)? = null,
-    onResend: ((String) -> Unit)? = null
+    onResend: ((String) -> Unit)? = null,
+    onEdit: ((ChatMessage) -> Unit)? = null,
+    onBranch: ((ChatMessage) -> Unit)? = null
 ) {
     val isUser = message.role == "user"
     val effectiveShowToolCalls = showToolCalls && !isUser
@@ -206,6 +208,22 @@ fun MessageBubble(
                             showMenu = false
                         }
                     )
+                    DropdownMenuItem(
+                        text = { Text("编辑") },
+                        enabled = isUser && onEdit != null,
+                        onClick = {
+                            onEdit?.invoke(message)
+                            showMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("从此处分支新会话") },
+                        enabled = onBranch != null,
+                        onClick = {
+                            onBranch?.invoke(message)
+                            showMenu = false
+                        }
+                    )
                 }
 
                 if (showSelectionDialog) {
@@ -272,7 +290,7 @@ fun MessageBubble(
 }
 
 private fun formatTimestamp(timestamp: Long): String {
-    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+    val sdf = SimpleDateFormat("yyyy.MM.dd HH:mm:ss", Locale.getDefault())
     return sdf.format(Date(timestamp))
 }
 

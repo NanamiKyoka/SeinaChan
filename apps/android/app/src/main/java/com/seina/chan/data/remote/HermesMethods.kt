@@ -3,11 +3,16 @@ package com.seina.chan.data.remote
 object HermesMethods {
     const val SESSION_CREATE = "session.create"
     const val SESSION_RESUME = "session.resume"
+    const val SESSION_INTERRUPT = "session.interrupt"
+    const val SESSION_UNDO = "session.undo"
+    const val SESSION_COMPRESS = "session.compress"
+    const val SESSION_BRANCH = "session.branch"
     const val PROMPT_SUBMIT = "prompt.submit"
     const val IMAGE_ATTACH_BYTES = "image.attach_bytes"
     const val APPROVAL_RESPOND = "approval.respond"
     const val CLARIFY_RESPOND = "clarify.respond"
     const val SECRET_RESPOND = "secret.respond"
+    const val COMMANDS_CATALOG = "commands.catalog"
 }
 
 object HermesEventTypes {
