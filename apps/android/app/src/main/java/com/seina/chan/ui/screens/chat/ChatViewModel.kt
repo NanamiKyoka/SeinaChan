@@ -94,8 +94,9 @@ class ChatViewModel @Inject constructor(
                 ) {
                     FileLogger.i("ChatViewModel", "WebSocket reconnected, resuming session=$currentDbSessionId")
                     try {
-                        val sid = sessionRepository.resumeSession(currentDbSessionId)
+                        val (sid, messages) = sessionRepository.resumeSession(currentDbSessionId)
                         currentWsSessionId = sid
+                        rpcResumeMessages = currentDbSessionId to messages
                         FileLogger.i("ChatViewModel", "Auto-resume after reconnect succeeded, sid=$sid")
                     } catch (e: Exception) {
                         FileLogger.w("ChatViewModel", "Auto-resume after reconnect failed: ${e.message}")
@@ -110,8 +111,9 @@ class ChatViewModel @Inject constructor(
             viewModelScope.launch {
                 FileLogger.i("ChatViewModel", "App recreated with open WebSocket, resuming session=$currentDbSessionId")
                 try {
-                    val sid = sessionRepository.resumeSession(currentDbSessionId)
+                    val (sid, messages) = sessionRepository.resumeSession(currentDbSessionId)
                     currentWsSessionId = sid
+                    rpcResumeMessages = currentDbSessionId to messages
                     FileLogger.i("ChatViewModel", "Immediate resume after recreation succeeded, sid=$sid")
                 } catch (e: Exception) {
                     FileLogger.w("ChatViewModel", "Immediate resume after recreation failed: ${e.message}")
@@ -244,16 +246,15 @@ class ChatViewModel @Inject constructor(
 
     suspend fun ensureSession(): String {
         if (currentDbSessionId.isNotEmpty()) {
-            // 已有本地存储的会话 ID，尝试验证服务端会话是否仍有效
             return try {
-                val sid = sessionRepository.resumeSession(currentDbSessionId)
+                val (sid, messages) = sessionRepository.resumeSession(currentDbSessionId)
                 currentWsSessionId = sid
+                rpcResumeMessages = currentDbSessionId to messages
                 chatRepository.setCurrentSessionId(currentDbSessionId)
                 chatRepository.clearMessages()
                 FileLogger.i("ChatViewModel", "ensureSession() resumed existing session: dbId=$currentDbSessionId, sid=$sid")
                 currentDbSessionId
             } catch (e: Exception) {
-                // 服务端会话已过期/不存在，清理并创建新会话
                 FileLogger.w("ChatViewModel", "ensureSession() stored session expired, creating new: ${e.message}")
                 currentDbSessionId = ""
                 currentWsSessionId = ""
@@ -300,8 +301,9 @@ class ChatViewModel @Inject constructor(
             return false
         }
         return try {
-            val sid = sessionRepository.resumeSession(currentDbSessionId)
+            val (sid, messages) = sessionRepository.resumeSession(currentDbSessionId)
             currentWsSessionId = sid
+            rpcResumeMessages = currentDbSessionId to messages
             FileLogger.i("ChatViewModel", "ensureWsSessionReady() resumed sid=$sid")
             true
         } catch (e: Exception) {
@@ -310,40 +312,45 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** 最近一次 session.resume RPC 返回的消息列表，按会话 ID 索引 */
+    private var rpcResumeMessages: Pair<String, List<ChatMessage>>? = null
+
     suspend fun resumeSession(): Result<String> {
         if (currentDbSessionId.isEmpty()) {
             return Result.failure(Exception("No session to resume"))
         }
         return try {
-            val sid = sessionRepository.resumeSession(currentDbSessionId)
+            val (sid, messages) = sessionRepository.resumeSession(currentDbSessionId)
             currentWsSessionId = sid
-            FileLogger.i("ChatViewModel", "resumeSession() succeeded: sid=$sid")
+            rpcResumeMessages = currentDbSessionId to messages
+            FileLogger.i("ChatViewModel", "resumeSession() succeeded: sid=$sid, rpcMessages=${messages.size}")
             Result.success(sid)
         } catch (e: Exception) {
             FileLogger.e("ChatViewModel", "resumeSession() failed", e)
+            rpcResumeMessages = null
             Result.failure(e)
         }
     }
 
     suspend fun resumeSessionWithId(storedSessionId: String): Result<String> {
-        // 同一会话已 resume 且 wsSessionId 有效 → 跳过，防止重复发送 session.resume 干扰服务端流式响应
         if (currentDbSessionId == storedSessionId && currentWsSessionId.isNotEmpty()) {
             FileLogger.i("ChatViewModel", "resumeSessionWithId() skipped: already resumed for $storedSessionId")
             return Result.success(currentWsSessionId)
         }
         currentDbSessionId = storedSessionId
         LogContext.sessionId = storedSessionId
-        // 立即同步到 ChatRepository，保证后续 loadMessages 和事件持久化使用正确的会话 ID
         chatRepository.setCurrentSessionId(storedSessionId)
         chatRepository.clearMessages()
         return try {
             connectionRepository.saveLastDbSessionId(currentDbSessionId)
-            val sid = sessionRepository.resumeSession(storedSessionId)
+            val (sid, messages) = sessionRepository.resumeSession(storedSessionId)
             currentWsSessionId = sid
-            FileLogger.i("ChatViewModel", "resumeSessionWithId() succeeded: sid=$sid")
+            rpcResumeMessages = storedSessionId to messages
+            FileLogger.i("ChatViewModel", "resumeSessionWithId() succeeded: sid=$sid, rpcMessages=${messages.size}")
             Result.success(sid)
         } catch (e: Exception) {
             FileLogger.e("ChatViewModel", "resumeSessionWithId() failed", e)
+            rpcResumeMessages = null
             Result.failure(e)
         }
     }
@@ -560,11 +567,16 @@ class ChatViewModel @Inject constructor(
             try {
                 val history = sessionRepository.fetchMessages(dbSessionId)
                 FileLogger.i("ChatViewModel", "loadMessages() fetched ${history.size} messages from server")
-                chatRepository.setMessages(history)
+                val finalMessages = rpcResumeMessages?.let { (rpcSid, rpcMsgs) ->
+                    if (rpcSid == dbSessionId && rpcMsgs.size > history.size) {
+                        FileLogger.w("ChatViewModel", "loadMessages() RPC returned ${rpcMsgs.size} messages, REST returned only ${history.size}, using RPC messages")
+                        rpcMsgs
+                    } else null
+                } ?: history
+                chatRepository.setMessages(finalMessages)
                 _inputState.update { it.copy(isLoading = false, error = null) }
                 lastLoadedSessionId = dbSessionId
             } catch (e: ApiError.NotFound) {
-                // 新会话（无历史消息）返回 404 是正常行为，不做错误提示
                 FileLogger.i("ChatViewModel", "loadMessages() no messages for new session $dbSessionId")
                 lastLoadedSessionId = dbSessionId
                 _inputState.update { it.copy(isLoading = false, error = null) }

@@ -14,6 +14,7 @@ import com.seina.chan.util.FileLogger
 import com.seina.chan.data.remote.ApiError
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -260,15 +261,41 @@ class SessionRepository(
         return CreateSessionResult(sid = sid, storedSessionId = storedSessionId)
     }
 
-    suspend fun resumeSession(sessionId: String): String {
+    suspend fun resumeSession(sessionId: String): Pair<String, List<ChatMessage>> {
         val params = buildJsonObject {
             put("session_id", sessionId)
         }
         val result = wsClient.request(HermesMethods.SESSION_RESUME, params)
-        return when {
+        val sid = when {
             result is JsonObject && result.containsKey("session_id") -> result["session_id"]!!.jsonPrimitive.content
             else -> result.toString()
         }
+        // 解析 RPC 返回的消息列表（格式: [{"role":"user","text":"..."}, ...]）
+        val rpcMessages = mutableListOf<ChatMessage>()
+        if (result is JsonObject) {
+            val messagesArray = result["messages"]?.jsonArray
+            if (messagesArray != null) {
+                var idx = 0L
+                for (item in messagesArray) {
+                    if (item !is JsonObject) continue
+                    val role = item["role"]?.jsonPrimitive?.content ?: continue
+                    if (role !in setOf("user", "assistant", "tool")) continue
+                    val text = item["text"]?.jsonPrimitive?.content ?: ""
+                    val reasoning = item["reasoning"]?.jsonPrimitive?.content
+                        ?: item["reasoning_content"]?.jsonPrimitive?.content ?: ""
+                    rpcMessages.add(
+                        ChatMessage(
+                            id = "rpc_${idx++}",
+                            role = role,
+                            content = text,
+                            reasoningText = reasoning,
+                            isStreaming = false
+                        )
+                    )
+                }
+            }
+        }
+        return Pair(sid, rpcMessages)
     }
 
     suspend fun deleteSession(sessionId: String) {
