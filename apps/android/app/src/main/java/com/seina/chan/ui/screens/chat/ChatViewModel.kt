@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -236,6 +237,7 @@ class ChatViewModel @Inject constructor(
             FileLogger.w("ChatViewModel", "ensureSession() failed to save dbSessionId: ${e.message}")
         }
         FileLogger.i("ChatViewModel", "ensureSession() created dbId=${result.storedSessionId}, sid=${result.sid}")
+        return currentDbSessionId
     }
 
     /**
