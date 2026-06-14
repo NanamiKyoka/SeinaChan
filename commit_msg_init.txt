@@ -1,0 +1,9 @@
+fix(session): 防止 init 异步恢复覆盖 doCreateSession 已设置的新会话 ID
+
+init 块中 loadLastDbSessionId() 是 viewModelScope.launch 异步的，
+可能在 doCreateSession() 之后才完成，用旧的 sessionId 覆盖新 ID。
+后续 loadMessages 判 isSessionSwitch=true 清空 currentWsSessionId，
+导致 sendMessage 时 ensureWsSessionReady 失败。
+
+加 currentDbSessionId.isEmpty() 守卫：只在尚未创建/恢复会话时才从
+DataStore 恢复旧 ID。doCreateSession 或 resume 已设的值不受影响。

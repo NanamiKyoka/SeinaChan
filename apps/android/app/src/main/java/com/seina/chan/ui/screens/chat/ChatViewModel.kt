@@ -76,7 +76,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val lastId = connectionRepository.loadLastDbSessionId()
-                if (!lastId.isNullOrEmpty()) {
+                if (!lastId.isNullOrEmpty() && currentDbSessionId.isEmpty()) {
                     currentDbSessionId = lastId
                     LogContext.sessionId = lastId
                     FileLogger.i("ChatViewModel", "Restored last dbSessionId=$lastId")
