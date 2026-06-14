@@ -243,7 +243,27 @@ class ChatViewModel @Inject constructor(
     }
 
     suspend fun ensureSession(): String {
-        if (currentDbSessionId.isNotEmpty()) return currentDbSessionId
+        if (currentDbSessionId.isNotEmpty()) {
+            // 已有本地存储的会话 ID，尝试验证服务端会话是否仍有效
+            return try {
+                val sid = sessionRepository.resumeSession(currentDbSessionId)
+                currentWsSessionId = sid
+                FileLogger.i("ChatViewModel", "ensureSession() resumed existing session: dbId=$currentDbSessionId, sid=$sid")
+                currentDbSessionId
+            } catch (e: Exception) {
+                // 服务端会话已过期/不存在，清理并创建新会话
+                FileLogger.w("ChatViewModel", "ensureSession() stored session expired, creating new: ${e.message}")
+                currentDbSessionId = ""
+                currentWsSessionId = ""
+                doCreateSession()
+            }
+        } else {
+            return doCreateSession()
+        }
+    }
+
+    /** 创建新会话并保存到本地存储 */
+    private suspend fun doCreateSession(): String {
         val result = sessionRepository.createSession()
         currentDbSessionId = result.storedSessionId
         currentWsSessionId = result.sid

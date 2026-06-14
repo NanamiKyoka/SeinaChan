@@ -1,4 +1,6 @@
 package com.seina.chan.ui.screens.settings
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -438,7 +440,7 @@ fun SettingsScreen(
                 } else if (uiState.tools.isEmpty()) {
                     Text("暂无可用工具")
                 } else {
-                    Column {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                         uiState.tools.forEach { tool ->
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
