@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -272,7 +273,18 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+
     /** 删除自定义工具链 */
+    fun removeCustomTool(category: String, toolName: String) {
+        val entry = "$category|$toolName"
+        val current = _uiState.value.customTools
+        // 同时从隐藏列表中移除
+        val hidden = _uiState.value.hiddenToolNames
+        if (toolName in hidden) {
+            setHiddenToolNames(hidden - toolName)
+        }
+        setCustomTools(current - entry)
+    }
 
     /** 工具信息 */
     data class ToolInfo(
@@ -287,33 +299,19 @@ class SettingsViewModel @Inject constructor(
             try {
                 val result = wsClient.request(HermesMethods.TOOLS_LIST)
                 val tools = mutableListOf<ToolInfo>()
-                // tools.list 可能返回 JsonArray 或 JsonObject，尝试兼容解析
-                when (val data = result) {
-                    is JsonArray -> {
-                        for (item in data) {
-                            val obj = item.jsonObject
-                            tools.add(ToolInfo(
-                                name = obj["name"]?.jsonPrimitive?.content ?: "",
-                                enabled = obj["enabled"]?.jsonPrimitive?.content?.toBoolean() ?: true,
-                                description = obj["description"]?.jsonPrimitive?.content ?: ""
-                            ))
-                        }
+                val resultObj = result.jsonObject
+                val toolsetArray = resultObj["toolsets"]?.jsonArray
+                    ?: resultObj["tools"]?.jsonArray
+                    ?: resultObj["items"]?.jsonArray
+                if (toolsetArray != null) {
+                    for (item in toolsetArray) {
+                        val obj = item.jsonObject
+                        tools.add(ToolInfo(
+                            name = obj["name"]?.jsonPrimitive?.content ?: "",
+                            enabled = obj["enabled"]?.jsonPrimitive?.content?.toBoolean() ?: true,
+                            description = obj["description"]?.jsonPrimitive?.content ?: ""
+                        ))
                     }
-                    is JsonObject -> {
-                        val items = result.jsonObject["tools"]?.jsonArray
-                            ?: result.jsonObject["items"]?.jsonArray
-                        if (items != null) {
-                            for (item in items) {
-                                val obj = item.jsonObject
-                                tools.add(ToolInfo(
-                                    name = obj["name"]?.jsonPrimitive?.content ?: "",
-                                    enabled = obj["enabled"]?.jsonPrimitive?.content?.toBoolean() ?: true,
-                                    description = obj["description"]?.jsonPrimitive?.content ?: ""
-                                ))
-                            }
-                        }
-                    }
-                    else -> {}
                 }
                 _uiState.update { it.copy(tools = tools, toolsError = null) }
                 FileLogger.i("SettingsViewModel", "工具列表加载成功: ${tools.size} 个工具")
@@ -329,8 +327,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val params = buildJsonObject {
-                    put("name", toolName)
-                    put("enabled", enabled)
+                    put("action", if (enabled) "enable" else "disable")
+                    put("names", buildJsonArray {
+                        add(kotlinx.serialization.json.JsonPrimitive(toolName))
+                    })
                 }
                 wsClient.request(HermesMethods.TOOLS_CONFIGURE, params)
                 FileLogger.i("SettingsViewModel", "工具配置成功: $toolName enabled=$enabled")
@@ -341,16 +341,6 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update { it.copy(toolsError = "配置失败: ${e.message}") }
             }
         }
-    }
-    fun removeCustomTool(category: String, toolName: String) {
-        val entry = "$category|$toolName"
-        val current = _uiState.value.customTools
-        // 同时从隐藏列表中移除
-        val hidden = _uiState.value.hiddenToolNames
-        if (toolName in hidden) {
-            setHiddenToolNames(hidden - toolName)
-        }
-        setCustomTools(current - entry)
     }
 
     fun disconnect() {
