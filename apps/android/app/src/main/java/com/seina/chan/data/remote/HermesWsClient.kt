@@ -70,7 +70,7 @@ class HermesWsClient(
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
 
-    private val _events = MutableSharedFlow<GatewayEvent>(extraBufferCapacity = 64)
+    private val _events = MutableSharedFlow<GatewayEvent>(extraBufferCapacity = 256)
     val events: SharedFlow<GatewayEvent> = _events.asSharedFlow()
 
 

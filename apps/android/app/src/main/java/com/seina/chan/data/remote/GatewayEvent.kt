@@ -24,7 +24,7 @@ sealed class GatewayEvent {
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("message.start")
+    @SerialName(HermesEventTypes.MESSAGE_START)
     data class MessageStart(
         val id: String = "",
         @SerialName("parent_id") val parentId: String? = null,
@@ -97,23 +97,32 @@ sealed class GatewayEvent {
     @Serializable
     @SerialName(HermesEventTypes.APPROVAL_REQUEST)
     data class ApprovalRequest(
-        val id: String,
-        @SerialName("tool_name") val toolName: String,
-        val input: Map<String, String> = emptyMap()
+        @SerialName("request_id") val id: String = "",
+        val command: String = "",
+        val description: String = "",
+        @SerialName("allow_permanent") val allowPermanent: Boolean = false
     ) : GatewayEvent()
 
     @Serializable
     @SerialName(HermesEventTypes.CLARIFY_REQUEST)
     data class ClarifyRequest(
-        val id: String,
-        val question: String
+        @SerialName("request_id") val id: String = "",
+        val question: String = "",
+        val choices: List<String>? = null
     ) : GatewayEvent()
 
     @Serializable
     @SerialName(HermesEventTypes.SECRET_REQUEST)
     data class SecretRequest(
-        val id: String,
-        val prompt: String
+        @SerialName("request_id") val id: String = "",
+        val prompt: String = ""
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.SUDO_REQUEST)
+    data class SudoRequest(
+        @SerialName("request_id") val id: String = "",
+        val prompt: String = ""
     ) : GatewayEvent()
 
     @Serializable
@@ -170,6 +179,7 @@ object GatewayEventSerializer : JsonContentPolymorphicSerializer<GatewayEvent>(G
             HermesEventTypes.APPROVAL_REQUEST -> GatewayEvent.ApprovalRequest.serializer()
             HermesEventTypes.CLARIFY_REQUEST -> GatewayEvent.ClarifyRequest.serializer()
             HermesEventTypes.SECRET_REQUEST -> GatewayEvent.SecretRequest.serializer()
+            HermesEventTypes.SUDO_REQUEST -> GatewayEvent.SudoRequest.serializer()
             HermesEventTypes.REVIEW_SUMMARY -> GatewayEvent.ReviewSummary.serializer()
             HermesEventTypes.ERROR -> GatewayEvent.ErrorEvent.serializer()
             HermesEventTypes.STATUS_UPDATE -> GatewayEvent.StatusUpdate.serializer()

@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.seina.chan.data.remote.HermesApiService
 import com.seina.chan.data.model.ConnectionConfig
+import com.seina.chan.data.remote.HermesWsClient
+import com.seina.chan.data.remote.HermesMethods
 import com.seina.chan.data.model.ConnectionProfile
 import com.seina.chan.data.remote.ModelAssignment
 import com.seina.chan.data.repository.ConnectionRepository
@@ -13,6 +15,14 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -42,14 +52,18 @@ data class SettingsUiState(
     /** 从服务端获取的可用模型列表 */
     val availableModels: List<ModelOption> = emptyList(),
     val isLoadingModels: Boolean = false,
-    val modelError: String? = null
+    val modelError: String? = null,
+    /** 工具列表 */
+    val tools: List<SettingsViewModel.ToolInfo> = emptyList(),
+    val toolsError: String? = null
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val connectionRepository: ConnectionRepository,
-    private val apiService: HermesApiService
+    private val apiService: HermesApiService,
+    private val wsClient: HermesWsClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -259,6 +273,75 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** 删除自定义工具链 */
+
+    /** 工具信息 */
+    data class ToolInfo(
+        val name: String,
+        val enabled: Boolean = true,
+        val description: String = ""
+    )
+
+    /** 从服务端拉取工具列表 */
+    fun listTools() {
+        viewModelScope.launch {
+            try {
+                val result = wsClient.request(HermesMethods.TOOLS_LIST)
+                val tools = mutableListOf<ToolInfo>()
+                // tools.list 可能返回 JsonArray 或 JsonObject，尝试兼容解析
+                when (val data = result) {
+                    is JsonArray -> {
+                        for (item in data) {
+                            val obj = item.jsonObject
+                            tools.add(ToolInfo(
+                                name = obj["name"]?.jsonPrimitive?.content ?: "",
+                                enabled = obj["enabled"]?.jsonPrimitive?.content?.toBoolean() ?: true,
+                                description = obj["description"]?.jsonPrimitive?.content ?: ""
+                            ))
+                        }
+                    }
+                    is JsonObject -> {
+                        val items = result.jsonObject["tools"]?.jsonArray
+                            ?: result.jsonObject["items"]?.jsonArray
+                        if (items != null) {
+                            for (item in items) {
+                                val obj = item.jsonObject
+                                tools.add(ToolInfo(
+                                    name = obj["name"]?.jsonPrimitive?.content ?: "",
+                                    enabled = obj["enabled"]?.jsonPrimitive?.content?.toBoolean() ?: true,
+                                    description = obj["description"]?.jsonPrimitive?.content ?: ""
+                                ))
+                            }
+                        }
+                    }
+                    else -> {}
+                }
+                _uiState.update { it.copy(tools = tools, toolsError = null) }
+                FileLogger.i("SettingsViewModel", "工具列表加载成功: ${tools.size} 个工具")
+            } catch (e: Exception) {
+                FileLogger.e("SettingsViewModel", "加载工具列表失败", e)
+                _uiState.update { it.copy(toolsError = "加载失败: ${e.message}") }
+            }
+        }
+    }
+
+    /** 启用/禁用工具 */
+    fun configureTool(toolName: String, enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                val params = buildJsonObject {
+                    put("name", toolName)
+                    put("enabled", enabled)
+                }
+                wsClient.request(HermesMethods.TOOLS_CONFIGURE, params)
+                FileLogger.i("SettingsViewModel", "工具配置成功: $toolName enabled=$enabled")
+                // 刷新列表
+                listTools()
+            } catch (e: Exception) {
+                FileLogger.e("SettingsViewModel", "配置工具失败: $toolName", e)
+                _uiState.update { it.copy(toolsError = "配置失败: ${e.message}") }
+            }
+        }
+    }
     fun removeCustomTool(category: String, toolName: String) {
         val entry = "$category|$toolName"
         val current = _uiState.value.customTools

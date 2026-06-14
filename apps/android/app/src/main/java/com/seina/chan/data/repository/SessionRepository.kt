@@ -273,6 +273,15 @@ class SessionRepository(
 
     suspend fun deleteSession(sessionId: String) {
         FileLogger.i("SessionRepository", "deleteSession() sessionId=$sessionId")
+        try {
+            val params = buildJsonObject {
+                put("session_id", sessionId)
+            }
+            wsClient.request(HermesMethods.SESSION_CLOSE, params)
+            FileLogger.i("SessionRepository", "session.close sent for sessionId=$sessionId")
+        } catch (e: Exception) {
+            FileLogger.w("SessionRepository", "session.close failed (non-fatal): ${e.message}")
+        }
         val success = apiService.deleteSession(sessionId)
         if (!success) {
             FileLogger.e("SessionRepository", "deleteSession() failed")
@@ -280,9 +289,18 @@ class SessionRepository(
         }
         FileLogger.i("SessionRepository", "deleteSession() succeeded")
     }
-
     suspend fun renameSession(sessionId: String, title: String) {
         FileLogger.i("SessionRepository", "renameSession() sessionId=$sessionId, title=$title")
+        try {
+            val params = buildJsonObject {
+                put("session_id", sessionId)
+                put("title", title)
+            }
+            wsClient.request(HermesMethods.SESSION_TITLE, params)
+            FileLogger.i("SessionRepository", "session.title RPC succeeded for sessionId=$sessionId")
+        } catch (e: Exception) {
+            FileLogger.w("SessionRepository", "session.title RPC failed, falling back to REST: ${e.message}")
+        }
         apiService.renameSession(sessionId, title)
         FileLogger.i("SessionRepository", "renameSession() succeeded")
     }

@@ -8,35 +8,42 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.seina.chan.data.remote.GatewayEvent.ApprovalRequest
+import com.seina.chan.data.remote.GatewayEvent.SudoRequest
 import com.seina.chan.ui.components.SeinaButton
 import com.seina.chan.ui.components.SeinaButtonVariant
+import com.seina.chan.ui.components.SeinaTextField
 import androidx.compose.material3.MaterialTheme
 import com.seina.chan.ui.theme.AppShapes
 import com.seina.chan.ui.theme.Spacing
 import com.seina.chan.ui.theme.TextStyles
 
 @Composable
-fun ApprovalDialog(
-    request: ApprovalRequest?,
-    onApprove: (Boolean) -> Unit,
-    onReject: () -> Unit,
+fun SudoDialog(
+    request: SudoRequest?,
+    onRespond: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     if (request == null) return
-    var allowPermanent by remember { mutableStateOf(false) }
+
+    var password by remember { mutableStateOf("") }
+
+    LaunchedEffect(request.id) {
+        password = ""
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -52,7 +59,7 @@ fun ApprovalDialog(
                 .padding(Spacing.lg)
         ) {
             Text(
-                text = "工具调用请求",
+                text = "需要管理员权限",
                 style = TextStyles.bodyLg.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -60,37 +67,20 @@ fun ApprovalDialog(
             Spacer(modifier = Modifier.height(Spacing.sm))
 
             Text(
-                text = "助手请求执行：${request.command}",
+                text = request.prompt,
                 style = TextStyles.bodyMd,
                 color = MaterialTheme.colorScheme.onBackground
             )
 
-            Spacer(modifier = Modifier.height(Spacing.sm))
+            Spacer(modifier = Modifier.height(Spacing.md))
 
-            if (request.description.isNotEmpty()) {
-                Text(
-                    text = request.description,
-                    style = TextStyles.bodySm,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(modifier = Modifier.height(Spacing.md))
-            }
-
-            if (request.allowPermanent) {
-                Spacer(modifier = Modifier.height(Spacing.sm))
-                Row {
-                    Checkbox(
-                        checked = allowPermanent,
-                        onCheckedChange = { allowPermanent = it }
-                    )
-                    Spacer(modifier = Modifier.width(Spacing.sm))
-                    Text(
-                        text = "记住此次选择",
-                        style = TextStyles.bodyMd,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
-            }
+            SeinaTextField(
+                value = password,
+                onValueChange = { password = it },
+                placeholder = "请输入密码...",
+                modifier = Modifier.fillMaxWidth(),
+                visualTransformation = PasswordVisualTransformation()
+            )
 
             Spacer(modifier = Modifier.height(Spacing.md))
 
@@ -98,8 +88,8 @@ fun ApprovalDialog(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 SeinaButton(
-                    text = "拒绝",
-                    onClick = onReject,
+                    text = "取消",
+                    onClick = onDismiss,
                     variant = SeinaButtonVariant.Secondary,
                     modifier = Modifier.weight(1f)
                 )
@@ -107,8 +97,10 @@ fun ApprovalDialog(
                 Spacer(modifier = Modifier.width(Spacing.md))
 
                 SeinaButton(
-                    text = "批准",
-                    onClick = { onApprove(allowPermanent) },
+                    text = "确认",
+                    onClick = {
+                        onRespond(password)
+                    },
                     variant = SeinaButtonVariant.Primary,
                     modifier = Modifier.weight(1f)
                 )

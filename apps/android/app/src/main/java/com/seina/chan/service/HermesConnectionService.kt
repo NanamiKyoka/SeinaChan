@@ -106,7 +106,7 @@ class HermesConnectionService : Service() {
                             showEventNotification("新消息", event.text.take(100), "message.complete")
                         }
                         is GatewayEvent.ApprovalRequest -> {
-                            showEventNotification("需要审批", "工具: ${event.toolName}", "approval.request")
+                            showEventNotification("需要审批", "工具: ${event.command}", "approval.request")
                         }
                         is GatewayEvent.ClarifyRequest -> {
                             showEventNotification("需要澄清", event.question, "clarify.request")

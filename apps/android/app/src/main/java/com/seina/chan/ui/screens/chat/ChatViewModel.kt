@@ -33,6 +33,7 @@ import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
 import com.seina.chan.data.model.SlashCommand
 import com.seina.chan.data.remote.HermesMethods
+import com.seina.chan.data.remote.GatewayEvent
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -135,6 +136,19 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.showTimestamps.collect { value ->
                 _inputState.update { it.copy(showTimestamps = value) }
+            }
+        }
+        var statusClearJob: kotlinx.coroutines.Job? = null
+        viewModelScope.launch {
+            chatRepository.events.collect { event ->
+                if (event is GatewayEvent.StatusUpdate) {
+                    _inputState.update { it.copy(statusText = event.text) }
+                    statusClearJob?.cancel()
+                    statusClearJob = viewModelScope.launch {
+                        kotlinx.coroutines.delay(3000)
+                        _inputState.update { it.copy(statusText = "") }
+                    }
+                }
             }
         }
     }
@@ -541,11 +555,11 @@ class ChatViewModel @Inject constructor(
 
     fun getCurrentDbSessionId(): String = currentDbSessionId
 
-    fun respondApproval(requestId: String, approved: Boolean) {
-        FileLogger.i("ChatViewModel", "respondApproval() requestId=$requestId, approved=$approved")
+    fun respondApproval(requestId: String, approved: Boolean, allowPermanent: Boolean = false) {
+        FileLogger.i("ChatViewModel", "respondApproval() requestId=$requestId, approved=$approved, allowPermanent=$allowPermanent")
         viewModelScope.launch {
             try {
-                chatRepository.respondApproval(requestId, approved)
+                chatRepository.respondApproval(requestId, approved, allowPermanent)
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "respondApproval() failed", e)
                 _inputState.update { it.copy(error = e.message) }
@@ -572,6 +586,18 @@ class ChatViewModel @Inject constructor(
                 chatRepository.respondSecret(requestId, secret)
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "respondSecret() failed", e)
+                _inputState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
+    fun respondSudo(requestId: String, password: String) {
+        FileLogger.i("ChatViewModel", "respondSudo() requestId=$requestId")
+        viewModelScope.launch {
+            try {
+                chatRepository.respondSudo(requestId, password)
+            } catch (e: Exception) {
+                FileLogger.e("ChatViewModel", "respondSudo() failed", e)
                 _inputState.update { it.copy(error = e.message) }
             }
         }

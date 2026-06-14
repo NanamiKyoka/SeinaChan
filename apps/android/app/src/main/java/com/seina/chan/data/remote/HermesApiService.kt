@@ -247,5 +247,5 @@ class HermesApiService(
         patch("/api/sessions/$sessionId", mapOf("title" to title))
 
     suspend fun searchSessions(query: String): SessionsSearchResponse =
-        get("/api/sessions/search?q=${query}")
+        get("/api/sessions/search?q=${java.net.URLEncoder.encode(query, "UTF-8")}")
 }

@@ -269,28 +269,36 @@ class ChatRepository(
         wsClient.request(HermesMethods.PROMPT_SUBMIT, params)
     }
 
-    suspend fun respondApproval(requestId: String, approved: Boolean) {
+    suspend fun respondApproval(id: String, approved: Boolean, allowPermanent: Boolean = false) {
         val params = buildJsonObject {
-            put("id", requestId)
-            put("approved", approved)
+            put("request_id", id)
+            put("choice", if (approved) "once" else "deny")
+            put("all", allowPermanent)
         }
         wsClient.request(HermesMethods.APPROVAL_RESPOND, params)
     }
-
-    suspend fun respondClarify(requestId: String, response: String) {
+    suspend fun respondClarify(requestId: String, answer: String) {
         val params = buildJsonObject {
-            put("id", requestId)
-            put("answer", response)
+            put("request_id", requestId)
+            put("answer", answer)
         }
         wsClient.request(HermesMethods.CLARIFY_RESPOND, params)
     }
 
-    suspend fun respondSecret(requestId: String, secret: String) {
+    suspend fun respondSecret(requestId: String, value: String) {
         val params = buildJsonObject {
-            put("id", requestId)
-            put("value", secret)
+            put("request_id", requestId)
+            put("value", value)
         }
         wsClient.request(HermesMethods.SECRET_RESPOND, params)
+    }
+
+    suspend fun respondSudo(requestId: String, password: String) {
+        val params = buildJsonObject {
+            put("request_id", requestId)
+            put("password", password)
+        }
+        wsClient.request(HermesMethods.SUDO_RESPOND, params)
     }
 
     suspend fun stopGenerating(sessionId: String? = null) {
@@ -475,8 +483,8 @@ class ChatRepository(
                 is GatewayEvent.ApprovalRequest -> {
                     val toolCall = ToolCallDetail(
                         id = event.id,
-                        name = event.toolName,
-                        args = event.input.toString(),
+                        name = event.command,
+                        args = event.description,
                         status = ToolCallStatus.Running
                     )
                     appendToolCallToStreamingMessage(toolCall)

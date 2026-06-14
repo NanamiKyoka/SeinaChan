@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Construction
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
@@ -75,6 +76,7 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    var showToolsDialog by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -143,6 +145,15 @@ fun SettingsScreen(
                         onAddCustomTool = { category, name -> viewModel.addCustomTool(category, name) },
                         onRemoveCustomTool = { category, name -> viewModel.removeCustomTool(category, name) },
                         icon = Icons.Filled.VisibilityOff
+                    )
+                    ClickableSettingItem(
+                        title = "管理工具",
+                        description = if (uiState.toolsError != null) "加载失败: ${uiState.toolsError}" else "查看和管理服务端工具",
+                        onClick = {
+                            viewModel.listTools()
+                            showToolsDialog = true
+                        },
+                        icon = Icons.Filled.Build
                     )
                 }
             }
@@ -411,6 +422,61 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(Spacing.md))
             }
         }
+    }
+
+    if (showToolsDialog) {
+        AlertDialog(
+            onDismissRequest = { showToolsDialog = false },
+            title = {
+                Text("服务端工具")
+            },
+            text = {
+                if (uiState.tools.isEmpty() && uiState.toolsError == null) {
+                    Text("正在加载...")
+                } else if (uiState.toolsError != null) {
+                    Text(uiState.toolsError!!)
+                } else if (uiState.tools.isEmpty()) {
+                    Text("暂无可用工具")
+                } else {
+                    Column {
+                        uiState.tools.forEach { tool ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Checkbox(
+                                    checked = tool.enabled,
+                                    onCheckedChange = { enabled ->
+                                        viewModel.configureTool(tool.name, enabled)
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(Spacing.sm))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = tool.name,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    if (tool.description.isNotBlank()) {
+                                        Text(
+                                            text = tool.description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showToolsDialog = false }) {
+                    Text("关闭")
+                }
+            }
+        )
     }
 }
 
@@ -826,6 +892,41 @@ private fun SwitchSettingItem(
                 onCheckedChange = onCheckedChange
             )
         }
+    )
+}
+
+@Composable
+private fun ClickableSettingItem(
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+    icon: ImageVector? = null
+) {
+    ListItem(
+        headlineContent = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        },
+        supportingContent = {
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        },
+        leadingContent = icon?.let {
+            {
+                Icon(
+                    imageVector = it,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        modifier = Modifier.clickable(onClick = onClick)
     )
 }
 

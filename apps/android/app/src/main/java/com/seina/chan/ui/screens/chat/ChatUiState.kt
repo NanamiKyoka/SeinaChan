@@ -19,5 +19,6 @@ data class ChatUiState(
     val quotedMessage: ChatMessage? = null,
     val isSearchMode: Boolean = false,
     val searchQuery: String = "",
-    val searchFilterUserOnly: Boolean = false
+    val searchFilterUserOnly: Boolean = false,
+    val statusText: String = ""
 )

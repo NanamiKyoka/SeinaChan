@@ -60,6 +60,7 @@ import com.seina.chan.ui.components.dialogs.ApprovalDialog
 import com.seina.chan.util.FileLogger
 import com.seina.chan.ui.components.dialogs.ClarifyDialog
 import com.seina.chan.ui.components.dialogs.SecretDialog
+import com.seina.chan.ui.components.dialogs.SudoDialog
 import com.seina.chan.ui.screens.sessions.SessionListScreen
 import com.seina.chan.ui.theme.Spacing
 import com.seina.chan.ui.theme.TextStyles
@@ -88,6 +89,7 @@ fun ChatScreen(
     val pendingApproval = remember { mutableStateOf<GatewayEvent.ApprovalRequest?>(null) }
     val pendingClarify = remember { mutableStateOf<GatewayEvent.ClarifyRequest?>(null) }
     val pendingSecret = remember { mutableStateOf<GatewayEvent.SecretRequest?>(null) }
+    val pendingSudo = remember { mutableStateOf<GatewayEvent.SudoRequest?>(null) }
     var previewImageUri by remember { mutableStateOf<String?>(null) }
 
     // 消息数量变化时自动滚动到最新消息
@@ -143,6 +145,7 @@ fun ChatScreen(
                 is GatewayEvent.ApprovalRequest -> pendingApproval.value = event
                 is GatewayEvent.ClarifyRequest -> pendingClarify.value = event
                 is GatewayEvent.SecretRequest -> pendingSecret.value = event
+                is GatewayEvent.SudoRequest -> pendingSudo.value = event
                 else -> Unit
             }
         }
@@ -160,9 +163,9 @@ fun ChatScreen(
 
     ApprovalDialog(
         request = pendingApproval.value,
-        onApprove = {
+        onApprove = { allowPermanent ->
             pendingApproval.value?.let {
-                viewModel.respondApproval(it.id, approved = true)
+                viewModel.respondApproval(it.id, approved = true, allowPermanent = allowPermanent)
                 pendingApproval.value = null
             }
         },
@@ -188,7 +191,12 @@ fun ChatScreen(
                 pendingClarify.value = null
             }
         },
-        onDismiss = { pendingClarify.value = null }
+        onDismiss = {
+            pendingClarify.value?.let {
+                viewModel.respondClarify(it.id, "")
+                pendingClarify.value = null
+            }
+        }
     )
 
     SecretDialog(
@@ -200,6 +208,22 @@ fun ChatScreen(
             }
         },
         onDismiss = { pendingSecret.value = null }
+    )
+
+    SudoDialog(
+        request = pendingSudo.value,
+        onRespond = { password ->
+            pendingSudo.value?.let {
+                viewModel.respondSudo(it.id, password)
+                pendingSudo.value = null
+            }
+        },
+        onDismiss = {
+            pendingSudo.value?.let {
+                viewModel.respondSudo(it.id, "")
+                pendingSudo.value = null
+            }
+        }
     )
 
     // 图片全屏预览弹窗
@@ -313,6 +337,11 @@ fun ChatScreen(
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     if (isStreaming) {
+                        Text(
+                            text = uiState.statusText.ifBlank { "思考中…" },
+                            style = TextStyles.bodySm,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
                         IconButton(onClick = { viewModel.stopGenerating() }) {
                             Icon(
                                 imageVector = Icons.Default.Stop,
