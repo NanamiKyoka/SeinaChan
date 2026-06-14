@@ -50,7 +50,16 @@ class ChatRepository(
 
     val events = wsClient.events
 
+    @Volatile
     private var currentSessionId: String? = null
+
+    /**
+     * 在会话创建/恢复/切换时立即同步 sessionId，确保后续事件持久化到正确的会话。
+     * 必须在任何可能产生消息的事件到达之前调用。
+     */
+    fun setCurrentSessionId(sessionId: String) {
+        currentSessionId = sessionId
+    }
 
     init {
         wsClient.events.onEach { event ->
@@ -412,7 +421,8 @@ class ChatRepository(
                                 isStreaming = false,
                                 isReasoning = false,
                                 reasoningText = event.reasoning.ifBlank { msg.reasoningText },
-                                content = event.text.ifBlank { msg.content }
+                                // 优先保留 delta 累积内容，仅在无累积内容时使用 event.text
+                                content = msg.content.ifBlank { event.text }
                             )
                         )
                         _messages.value = messages
@@ -575,7 +585,11 @@ class ChatRepository(
      * 将单条消息持久化到 Room
      */
     private fun persistMessage(message: ChatMessage) {
-        val sid = currentSessionId ?: return
+        val sid = currentSessionId
+        if (sid == null) {
+            FileLogger.w("ChatRepository", "persistMessage dropped: currentSessionId is null, msgId=${message.id}")
+            return
+        }
         scope.launch {
             try {
                 messageDao.upsert(message.toEntity(sid))
@@ -585,12 +599,12 @@ class ChatRepository(
         }
     }
 
-    /**
-     * 将当前所有消息持久化到 Room（用于 setMessages 等批量场景）
-     * 会先清空该会话已有缓存，避免服务器返回的消息结构与本地不一致时产生残留。
-     */
     private fun persistMessages() {
-        val sid = currentSessionId ?: return
+        val sid = currentSessionId
+        if (sid == null) {
+            FileLogger.w("ChatRepository", "persistMessages dropped: currentSessionId is null, msgCount=${_messages.value.size}")
+            return
+        }
         val msgs = _messages.value
         scope.launch {
             try {

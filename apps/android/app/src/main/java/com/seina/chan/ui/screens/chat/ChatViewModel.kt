@@ -248,6 +248,8 @@ class ChatViewModel @Inject constructor(
             return try {
                 val sid = sessionRepository.resumeSession(currentDbSessionId)
                 currentWsSessionId = sid
+                chatRepository.setCurrentSessionId(currentDbSessionId)
+                chatRepository.clearMessages()
                 FileLogger.i("ChatViewModel", "ensureSession() resumed existing session: dbId=$currentDbSessionId, sid=$sid")
                 currentDbSessionId
             } catch (e: Exception) {
@@ -267,6 +269,8 @@ class ChatViewModel @Inject constructor(
         val result = sessionRepository.createSession()
         currentDbSessionId = result.storedSessionId
         currentWsSessionId = result.sid
+        // 立即同步到 ChatRepository，保证后续事件持久化到正确的会话
+        chatRepository.setCurrentSessionId(result.storedSessionId)
         // 创建全新会话时清空旧会话残留的消息
         chatRepository.clearMessages()
         try {
@@ -329,6 +333,9 @@ class ChatViewModel @Inject constructor(
         }
         currentDbSessionId = storedSessionId
         LogContext.sessionId = storedSessionId
+        // 立即同步到 ChatRepository，保证后续 loadMessages 和事件持久化使用正确的会话 ID
+        chatRepository.setCurrentSessionId(storedSessionId)
+        chatRepository.clearMessages()
         return try {
             connectionRepository.saveLastDbSessionId(currentDbSessionId)
             val sid = sessionRepository.resumeSession(storedSessionId)
