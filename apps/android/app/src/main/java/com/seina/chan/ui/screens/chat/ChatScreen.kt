@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.DrawerValue
@@ -92,14 +93,26 @@ fun ChatScreen(
     val pendingSudo = remember { mutableStateOf<GatewayEvent.SudoRequest?>(null) }
     var previewImageUri by remember { mutableStateOf<String?>(null) }
 
-    // 消息数量变化时自动滚动到最新消息
+    // 仅在用户处于消息列表底部时自动滚动；若用户手动上滑查看历史，则停止自动跟随
+    val autoScrollEnabled by remember {
+        derivedStateOf { !listState.canScrollForward }
+    }
+
+    // 新消息到达时（条数变化），仅在底部自动滚动
     LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty()) {
+        if (autoScrollEnabled && uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(uiState.messages.size - 1)
         }
     }
 
-    // 输入法弹出时自动滚动到底部，避免键盘遮挡最新消息
+    // 流式回复内容增长时（最后一条消息长度变化），仅在底部自动跟随
+    LaunchedEffect(uiState.messages.lastOrNull()?.content?.length) {
+        if (autoScrollEnabled && uiState.messages.isNotEmpty()) {
+            listState.animateScrollToItem(uiState.messages.size - 1)
+        }
+    }
+
+    // 输入法弹出时始终滚动到底部（用户正在输入，需要看到输入框）
     val density = LocalDensity.current
     val isKeyboardVisible = WindowInsets.ime.getBottom(density) > 0
 
