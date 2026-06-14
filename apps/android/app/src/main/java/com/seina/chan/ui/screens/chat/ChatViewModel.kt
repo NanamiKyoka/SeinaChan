@@ -214,7 +214,7 @@ class ChatViewModel @Inject constructor(
     fun resendMessage(content: String) {
         viewModelScope.launch {
             try {
-                chatRepository.sendMessage(content, currentWsSessionId)
+                chatRepository.sendMessage(content, currentWsSessionId, currentDbSessionId)
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "resendMessage() failed", e)
                 _inputState.update { it.copy(error = e.message) }
@@ -297,7 +297,7 @@ class ChatViewModel @Inject constructor(
                 }
                 if (video != null) {
                     try {
-                        chatRepository.sendVideo(video, context.contentResolver, currentWsSessionId)
+                        chatRepository.sendVideo(video, context.contentResolver, currentWsSessionId, currentDbSessionId)
                         FileLogger.i("ChatViewModel", "sendVideo() succeeded for uri=$video")
                     } catch (e: Exception) {
                         FileLogger.e("ChatViewModel", "sendVideo() failed for uri=$video", e)
@@ -333,10 +333,10 @@ class ChatViewModel @Inject constructor(
                         fileContents.toString().trimEnd()
                     }
                     if (combinedText.isNotBlank()) {
-                        chatRepository.sendMessage(combinedText, currentWsSessionId, uiState.value.quotedMessage?.id)
+                        chatRepository.sendMessage(combinedText, currentWsSessionId, currentDbSessionId, uiState.value.quotedMessage?.id)
                     }
                 } else if (text.isNotEmpty()) {
-                    chatRepository.sendMessage(text, currentWsSessionId, uiState.value.quotedMessage?.id)
+                    chatRepository.sendMessage(text, currentWsSessionId, currentDbSessionId, uiState.value.quotedMessage?.id)
                 } else if (images.isNotEmpty() || video != null) {
                     // 纯图片/视频场景：发送空 prompt 触发 assistant 回复
                     chatRepository.submitPrompt(currentWsSessionId)
@@ -385,7 +385,7 @@ class ChatViewModel @Inject constructor(
     private suspend fun sendImagesInternal(uris: List<Uri>) {
         for (uri in uris) {
             try {
-                chatRepository.sendImage(uri, context.contentResolver, currentWsSessionId)
+                chatRepository.sendImage(uri, context.contentResolver, currentWsSessionId, currentDbSessionId)
                 FileLogger.i("ChatViewModel", "sendImage() succeeded for uri=$uri")
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "sendImage() failed for uri=$uri", e)
@@ -417,7 +417,7 @@ class ChatViewModel @Inject constructor(
                         ensureSession()
                     }
                 }
-                chatRepository.sendImage(uri, context.contentResolver, currentWsSessionId)
+                chatRepository.sendImage(uri, context.contentResolver, currentWsSessionId, currentDbSessionId)
                 _inputState.update { it.copy(isLoading = false) }
                 FileLogger.i("ChatViewModel", "sendImage() succeeded")
             } catch (e: Exception) {
@@ -475,7 +475,9 @@ class ChatViewModel @Inject constructor(
         }
         _inputState.update { it.copy(isLoading = true, error = null) }
 
-        // 先从 Room 缓存加载，立即展示
+        // 单协程顺序执行：先加载缓存快速展示，再从服务端拉取最新消息。
+        // 避免两个并发 launch 中 loadCachedMessages 在 setMessages 的异步持久化
+        // 完成前读到旧数据，覆盖掉刚拉回的服务端消息。
         viewModelScope.launch {
             try {
                 val cached = chatRepository.loadCachedMessages(dbSessionId)
@@ -486,10 +488,7 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 FileLogger.w("ChatViewModel", "loadMessages() cache load failed: ${e.message}")
             }
-        }
 
-        // 后台从服务端拉取最新消息
-        viewModelScope.launch {
             try {
                 val history = sessionRepository.fetchMessages(dbSessionId)
                 FileLogger.i("ChatViewModel", "loadMessages() fetched ${history.size} messages from server")
@@ -498,7 +497,6 @@ class ChatViewModel @Inject constructor(
                 lastLoadedSessionId = dbSessionId
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "loadMessages() server fetch failed", e)
-                // 即使服务端拉取失败也标记为已加载，避免后续 recompose 时重复请求
                 lastLoadedSessionId = dbSessionId
                 if (chatRepository.messages.value.isEmpty()) {
                     _inputState.update { it.copy(isLoading = false, error = "加载历史消息失败: ${e.message}") }

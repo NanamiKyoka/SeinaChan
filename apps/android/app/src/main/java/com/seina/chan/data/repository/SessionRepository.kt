@@ -136,7 +136,11 @@ class SessionRepository(
             if (msg.role == "assistant" && merged.isNotEmpty() && merged.last().role == "assistant") {
                 val last = merged.last()
                 merged[merged.size - 1] = last.copy(
-                    content = if (msg.content.isNotBlank()) msg.content else last.content,
+                    content = when {
+                        msg.content.isNotBlank() && last.content.isNotBlank() -> last.content + "\n\n" + msg.content
+                        msg.content.isNotBlank() -> msg.content
+                        else -> last.content
+                    },
                     reasoningText = when {
                         last.reasoningText.isNotBlank() && msg.reasoningText.isNotBlank() ->
                             last.reasoningText + "\n\n" + msg.reasoningText

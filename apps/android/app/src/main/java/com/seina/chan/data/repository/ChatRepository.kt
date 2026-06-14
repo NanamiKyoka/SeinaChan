@@ -74,8 +74,12 @@ class ChatRepository(
         }.launchIn(scope)
     }
 
-    suspend fun sendMessage(text: String, sessionId: String, parentId: String? = null) {
-        currentSessionId = sessionId
+    /**
+     * @param dbSessionId 用于 Room 持久化的存储会话 ID（稳定不变）
+     * @param wsSessionId 用于 WebSocket PROMPT_SUBMIT 的会话 ID（每次 resume 可能不同）
+     */
+    suspend fun sendMessage(text: String, wsSessionId: String, dbSessionId: String, parentId: String? = null) {
+        currentSessionId = dbSessionId
         // 结束所有未完成的 assistant 消息，避免积累空消息
         _messages.value = _messages.value.map {
             if (it.isStreaming && it.role == "assistant") {
@@ -97,7 +101,7 @@ class ChatRepository(
         persistMessage(userMessage)
 
         val params = buildJsonObject {
-            put("session_id", sessionId)
+            put("session_id", wsSessionId)
             put("text", text)
             if (parentId != null) {
                 put("parent_id", parentId)
@@ -112,8 +116,8 @@ class ChatRepository(
      * @param contentResolver 用于读取图片内容
      * @param sessionId 会话 ID
      */
-    suspend fun sendImage(imageUri: Uri, contentResolver: ContentResolver, sessionId: String) {
-        currentSessionId = sessionId
+    suspend fun sendImage(imageUri: Uri, contentResolver: ContentResolver, wsSessionId: String, dbSessionId: String) {
+        currentSessionId = dbSessionId
         // 结束所有未完成的 assistant 消息，避免积累空消息
         _messages.value = _messages.value.map {
             if (it.isStreaming && it.role == "assistant") {
@@ -163,7 +167,7 @@ class ChatRepository(
         // 构造 data URI
         val dataUri = "data:$mimeType;base64,$base64Data"
         val params = buildJsonObject {
-            put("session_id", sessionId)
+            put("session_id", wsSessionId)
             put("data", dataUri)
             put("name", "image.jpg")
         }
@@ -204,8 +208,8 @@ class ChatRepository(
      * @param contentResolver 用于读取视频内容
      * @param sessionId 会话 ID
      */
-    suspend fun sendVideo(videoUri: Uri, contentResolver: ContentResolver, sessionId: String) {
-        currentSessionId = sessionId
+    suspend fun sendVideo(videoUri: Uri, contentResolver: ContentResolver, wsSessionId: String, dbSessionId: String) {
+        currentSessionId = dbSessionId
         _messages.value = _messages.value.map {
             if (it.isStreaming && it.role == "assistant") {
                 finalizeToolCallsInMessage(
@@ -259,7 +263,7 @@ class ChatRepository(
 
         val dataUri = "data:$mimeType;base64,$base64Data"
         val params = buildJsonObject {
-            put("session_id", sessionId)
+            put("session_id", wsSessionId)
             put("data", dataUri)
             put("name", "video.mp4")
         }
@@ -513,7 +517,7 @@ class ChatRepository(
 
     private fun updateLastStreamingAssistantMessage(transform: (ChatMessage) -> ChatMessage) {
         _messages.value = _messages.value.mapIndexed { index, msg ->
-            if (index == _messages.value.lastIndex && msg.role == "assistant") {
+            if (index == _messages.value.lastIndex && msg.isStreaming && msg.role == "assistant") {
                 transform(msg)
             } else msg
         }
