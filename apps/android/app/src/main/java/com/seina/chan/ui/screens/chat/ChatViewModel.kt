@@ -244,8 +244,8 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    suspend fun ensureSession(): String {
-        if (currentDbSessionId.isNotEmpty()) {
+    suspend fun ensureSession(forceNew: Boolean = false): String {
+        if (currentDbSessionId.isNotEmpty() && !forceNew) {
             return try {
                 val (sid, messages) = sessionRepository.resumeSession(currentDbSessionId)
                 currentWsSessionId = sid
@@ -261,6 +261,10 @@ class ChatViewModel @Inject constructor(
                 doCreateSession()
             }
         } else {
+            if (forceNew) {
+                currentDbSessionId = ""
+                currentWsSessionId = ""
+            }
             return doCreateSession()
         }
     }

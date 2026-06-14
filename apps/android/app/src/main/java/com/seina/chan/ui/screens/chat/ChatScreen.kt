@@ -132,7 +132,7 @@ fun ChatScreen(
         if (currentSessionId.isEmpty()) {
             scope.launch {
                 try {
-                    currentSessionId = viewModel.ensureSession()
+                    currentSessionId = viewModel.ensureSession(forceNew = true)
                 } catch (e: Exception) {
                     FileLogger.e("ChatScreen", "ensureSession failed", e)
                 }
