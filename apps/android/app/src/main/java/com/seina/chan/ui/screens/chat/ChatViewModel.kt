@@ -13,6 +13,7 @@ import com.seina.chan.data.repository.SessionRepository
 import com.seina.chan.data.repository.SettingsRepository
 import com.seina.chan.service.ServiceSessionTracker
 import com.seina.chan.util.FileLogger
+import com.seina.chan.util.LogContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -23,10 +24,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
 import com.seina.chan.data.model.SlashCommand
@@ -74,6 +76,7 @@ class ChatViewModel @Inject constructor(
                 val lastId = connectionRepository.loadLastDbSessionId()
                 if (!lastId.isNullOrEmpty()) {
                     currentDbSessionId = lastId
+                    LogContext.sessionId = lastId
                     FileLogger.i("ChatViewModel", "Restored last dbSessionId=$lastId")
                 }
             } catch (e: Exception) {
@@ -186,7 +189,7 @@ class ChatViewModel @Inject constructor(
     fun stopGenerating() {
         viewModelScope.launch {
             try {
-                chatRepository.stopGenerating()
+                chatRepository.stopGenerating(currentWsSessionId.ifEmpty { null })
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "stopGenerating() failed", e)
             }
@@ -290,6 +293,7 @@ class ChatViewModel @Inject constructor(
             return Result.success(currentWsSessionId)
         }
         currentDbSessionId = storedSessionId
+        LogContext.sessionId = storedSessionId
         return try {
             connectionRepository.saveLastDbSessionId(currentDbSessionId)
             val sid = sessionRepository.resumeSession(storedSessionId)
@@ -313,66 +317,71 @@ class ChatViewModel @Inject constructor(
         _inputState.update { it.copy(isLoading = true, error = null, selectedImages = emptyList(), selectedVideo = null, selectedFiles = emptyList()) }
         viewModelScope.launch {
             try {
-                // 确保有可用的 wsSessionId；优先等待重连并 resume，若彻底失败则仅创建
-                // 新会话作为最终 fallback，不再在中间状态（WebSocket 未就绪）时盲目创建新会话
-                if (currentDbSessionId.isEmpty() || !ensureWsSessionReady()) {
-                    if (currentDbSessionId.isEmpty()) {
-                        ensureSession()
-                    } else {
-                        _inputState.update { it.copy(isLoading = false, error = "会话恢复失败，请稍后重试") }
-                        return@launch
-                    }
-                }
-                if (video != null) {
-                    try {
-                        chatRepository.sendVideo(video, context.contentResolver, currentWsSessionId, currentDbSessionId)
-                        FileLogger.i("ChatViewModel", "sendVideo() succeeded for uri=$video")
-                    } catch (e: Exception) {
-                        FileLogger.e("ChatViewModel", "sendVideo() failed for uri=$video", e)
-                    }
-                }
-                if (images.isNotEmpty()) {
-                    sendImagesInternal(images)
-                }
-                if (files.isNotEmpty()) {
-                    val fileContents = StringBuilder()
-                    for (uri in files) {
-                        try {
-                            context.contentResolver.openInputStream(uri)?.use { stream ->
-                                val bytes = stream.readBytes()
-                                val isBinary = bytes.contains(0.toByte())
-                                val name = uri.lastPathSegment ?: "未知文件"
-                                if (isBinary) {
-                                    fileContents.append("[File: $name] (binary file, content not readable)\n\n---\n\n")
-                                } else {
-                                    val charset = java.nio.charset.Charset.defaultCharset()
-                                    val content = String(bytes, charset)
-                                    fileContents.append("[File: $name]\n\n$content\n\n---\n\n")
-                                }
-                            }
-                        } catch (e: Exception) {
-                            val name = uri.lastPathSegment ?: "未知文件"
-                            fileContents.append("[File: $name] (binary file, content not readable)\n\n---\n\n")
+                withTimeout(30_000L) {
+                    // 确保有可用的 wsSessionId；优先等待重连并 resume，若彻底失败则仅创建
+                    // 新会话作为最终 fallback，不再在中间状态（WebSocket 未就绪）时盲目创建新会话
+                    if (currentDbSessionId.isEmpty() || !ensureWsSessionReady()) {
+                        if (currentDbSessionId.isEmpty()) {
+                            ensureSession()
+                        } else {
+                            _inputState.update { it.copy(isLoading = false, error = "会话恢复失败，请稍后重试") }
+                            return@withTimeout
                         }
                     }
-                    val combinedText = if (text.isNotEmpty()) {
-                        fileContents.toString() + text
-                    } else {
-                        fileContents.toString().trimEnd()
+                    if (video != null) {
+                        try {
+                            chatRepository.sendVideo(video, context.contentResolver, currentWsSessionId, currentDbSessionId)
+                            FileLogger.i("ChatViewModel", "sendVideo() succeeded for uri=$video")
+                        } catch (e: Exception) {
+                            FileLogger.e("ChatViewModel", "sendVideo() failed for uri=$video", e)
+                        }
                     }
-                    if (combinedText.isNotBlank()) {
-                        chatRepository.sendMessage(combinedText, currentWsSessionId, currentDbSessionId, uiState.value.quotedMessage?.id)
+                    if (images.isNotEmpty()) {
+                        sendImagesInternal(images)
                     }
-                } else if (text.isNotEmpty()) {
-                    chatRepository.sendMessage(text, currentWsSessionId, currentDbSessionId, uiState.value.quotedMessage?.id)
-                } else if (images.isNotEmpty() || video != null) {
-                    // 纯图片/视频场景：发送空 prompt 触发 assistant 回复
-                    chatRepository.submitPrompt(currentWsSessionId)
+                    if (files.isNotEmpty()) {
+                        val fileContents = StringBuilder()
+                        for (uri in files) {
+                            try {
+                                context.contentResolver.openInputStream(uri)?.use { stream ->
+                                    val bytes = stream.readBytes()
+                                    val isBinary = bytes.contains(0.toByte())
+                                    val name = uri.lastPathSegment ?: "未知文件"
+                                    if (isBinary) {
+                                        fileContents.append("[File: $name] (binary file, content not readable)\n\n---\n\n")
+                                    } else {
+                                        val charset = java.nio.charset.Charset.defaultCharset()
+                                        val content = String(bytes, charset)
+                                        fileContents.append("[File: $name]\n\n$content\n\n---\n\n")
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                val name = uri.lastPathSegment ?: "未知文件"
+                                fileContents.append("[File: $name] (binary file, content not readable)\n\n---\n\n")
+                            }
+                        }
+                        val combinedText = if (text.isNotEmpty()) {
+                            fileContents.toString() + text
+                        } else {
+                            fileContents.toString().trimEnd()
+                        }
+                        if (combinedText.isNotBlank()) {
+                            chatRepository.sendMessage(combinedText, currentWsSessionId, currentDbSessionId, uiState.value.quotedMessage?.id)
+                        }
+                    } else if (text.isNotEmpty()) {
+                        chatRepository.sendMessage(text, currentWsSessionId, currentDbSessionId, uiState.value.quotedMessage?.id)
+                    } else if (images.isNotEmpty() || video != null) {
+                        // 纯图片/视频场景：发送空 prompt 触发 assistant 回复
+                        chatRepository.submitPrompt(currentWsSessionId)
+                    }
+                    clearQuote()
+                    _editingMessage.value = null
+                    _inputState.update { it.copy(currentInput = "", isLoading = false) }
+                    FileLogger.i("ChatViewModel", "sendMessage() succeeded")
                 }
-                clearQuote()
-                _editingMessage.value = null
-                _inputState.update { it.copy(currentInput = "", isLoading = false) }
-                FileLogger.i("ChatViewModel", "sendMessage() succeeded")
+            } catch (e: TimeoutCancellationException) {
+                FileLogger.e("ChatViewModel", "发送消息超时", e)
+                _inputState.update { it.copy(isLoading = false, error = "发送超时，请重试") }
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "sendMessage() failed", e)
                 _inputState.update { it.copy(isLoading = false, error = e.message) }
@@ -484,6 +493,7 @@ class ChatViewModel @Inject constructor(
         }
         val isSessionSwitch = currentDbSessionId != dbSessionId
         currentDbSessionId = dbSessionId
+        LogContext.sessionId = dbSessionId
         // 仅切换会话时才重置 wsSessionId，同会话重建时保留以支持 resumeSessionWithId 跳过
         if (isSessionSwitch) {
             currentWsSessionId = ""
@@ -588,5 +598,10 @@ class ChatViewModel @Inject constructor(
                 _inputState.update { it.copy(error = e.message) }
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        LogContext.sessionId = null
     }
 }

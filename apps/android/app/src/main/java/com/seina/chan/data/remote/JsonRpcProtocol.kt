@@ -24,6 +24,11 @@ data class JsonRpcError(
     val message: String
 )
 
+class JsonRpcException(
+    val code: Int,
+    override val message: String
+) : Exception("JSON-RPC error $code: $message")
+
 @Serializable
 data class JsonRpcEvent(
     val event: String,

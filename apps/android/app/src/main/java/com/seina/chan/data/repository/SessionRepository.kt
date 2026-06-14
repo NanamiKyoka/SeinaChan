@@ -11,6 +11,8 @@ import com.seina.chan.data.remote.HermesApiService
 import com.seina.chan.data.remote.HermesMethods
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.util.FileLogger
+import com.seina.chan.data.remote.ApiError
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -60,8 +62,7 @@ class SessionRepository(
     }
 
     suspend fun fetchMessages(sessionId: String): List<ChatMessage> {
-        val raw = apiService.getSessionMessages(sessionId).messages
-
+        val raw = retryFetch { apiService.getSessionMessages(sessionId).messages }
         // 收集 tool 角色的结果（按 tool_call_id 索引）
         val toolResults = raw.filter { it.role == "tool" }.associate { dto ->
             val resultText = when (dto.content) {
@@ -325,5 +326,23 @@ class SessionRepository(
                 matchedKeyword = it.keyword
             )
         }
+    }
+
+    private suspend fun <T> retryFetch(block: suspend () -> T): T {
+        var lastError: Exception? = null
+        repeat(3) { attempt ->
+            try {
+                return block()
+            } catch (e: ApiError.Timeout) {
+                FileLogger.w("SessionRepository", "fetch timeout (attempt ${attempt + 1})")
+                lastError = e
+                if (attempt < 2) delay(500)
+            } catch (e: ApiError.NetworkError) {
+                FileLogger.w("SessionRepository", "fetch network error (attempt ${attempt + 1})", e)
+                lastError = e
+                if (attempt < 2) delay(500)
+            }
+        }
+        throw lastError ?: Exception("fetch failed")
     }
 }

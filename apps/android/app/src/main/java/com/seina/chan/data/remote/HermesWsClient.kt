@@ -14,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -58,10 +60,11 @@ class HermesWsClient(
         )
         private const val DEFAULT_TIMEOUT = 60_000L
 
-        /** 心跳检查间隔 */
         private const val HEARTBEAT_CHECK_INTERVAL_MS = 15_000L
         /** 最大重连延迟：5 分钟 */
         private const val MAX_RECONNECT_DELAY_MS = 300_000L
+        /** 最大重连次数：20 次 × 最多 5 分钟 = 约 100 分钟总重连窗口 */
+        private const val MAX_RECONNECT_ATTEMPTS = 20
     }
 
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
@@ -70,6 +73,8 @@ class HermesWsClient(
     private val _events = MutableSharedFlow<GatewayEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<GatewayEvent> = _events.asSharedFlow()
 
+
+    private val connectLock = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val pendingRequests = ConcurrentHashMap<Int, CompletableDeferred<JsonElement>>()
 
@@ -142,14 +147,15 @@ class HermesWsClient(
     }
 
     suspend fun connect(url: String, token: String): Boolean {
-        FileLogger.i("HermesWsClient", "connect() called, url=$url, tokenPrefix=${token.take(4)}")
-        if (_state.value == ConnectionState.Open || _state.value == ConnectionState.Connecting) {
-            FileLogger.i("HermesWsClient", "Already connected or connecting, state=${_state.value}")
-            return true
+        connectLock.withLock {
+            if (_state.value == ConnectionState.Open || _state.value == ConnectionState.Connecting) {
+                FileLogger.i("HermesWsClient", "Already connected or connecting, state=${_state.value}")
+                return true
+            }
+            lastUrl = url
+            lastToken = token
+            return doConnect(url, token)
         }
-        lastUrl = url
-        lastToken = token
-        return doConnect(url, token)
     }
 
     private suspend fun doConnect(url: String, token: String): Boolean {
@@ -214,8 +220,12 @@ class HermesWsClient(
 
     private fun scheduleReconnect() {
         if (reconnectJob?.isActive == true) return
-        // 无限重连，不设尝试次数上限
         reconnectJob = scope.launch {
+            if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                FileLogger.w("HermesWsClient", "重连次数已达上限 $MAX_RECONNECT_ATTEMPTS，停止重连")
+                shouldReconnect = false
+                return@launch
+            }
             val delayMs = (1000 * 2.0.pow(reconnectAttempts.toDouble())).toLong()
                 .coerceAtMost(MAX_RECONNECT_DELAY_MS)
             FileLogger.i("HermesWsClient", "计划重连，第${reconnectAttempts + 1}次，延迟${delayMs}ms")
@@ -232,22 +242,24 @@ class HermesWsClient(
      * 供应用回到前台时调用，实现快速恢复连接。
      */
     fun reconnectImmediately() {
-        if (_state.value == ConnectionState.Open || _state.value == ConnectionState.Connecting) {
-            FileLogger.i("HermesWsClient", "reconnectImmediately() 跳过，当前状态=$_state.value")
-            return
-        }
-        FileLogger.i("HermesWsClient", "reconnectImmediately() 触发立即重连")
-        reconnectJob?.cancel()
-        reconnectJob = null
-        reconnectAttempts = 0
-        val url = lastUrl
-        val token = lastToken
-        if (url == null || token == null) {
-            FileLogger.w("HermesWsClient", "reconnectImmediately() 失败：缺少 url 或 token")
-            return
-        }
         scope.launch {
-            doConnect(url, token)
+            connectLock.withLock {
+                if (_state.value == ConnectionState.Open || _state.value == ConnectionState.Connecting) {
+                    FileLogger.i("HermesWsClient", "reconnectImmediately() 跳过，当前状态=$_state.value")
+                    return@withLock
+                }
+                FileLogger.i("HermesWsClient", "reconnectImmediately() 触发立即重连")
+                reconnectJob?.cancel()
+                reconnectJob = null
+                reconnectAttempts = 0
+                val url = lastUrl
+                val token = lastToken
+                if (url == null || token == null) {
+                    FileLogger.w("HermesWsClient", "reconnectImmediately() 失败：缺少 url 或 token")
+                    return@withLock
+                }
+                doConnect(url, token)
+            }
         }
     }
 
@@ -276,16 +288,18 @@ class HermesWsClient(
 
     fun disconnect() {
         FileLogger.i("HermesWsClient", "disconnect() called")
-        shouldReconnect = false
-        reconnectJob?.cancel()
-        reconnectJob = null
-        heartbeatWatchJob?.cancel()
-        heartbeatWatchJob = null
         scope.launch {
-            session?.close()
-            session = null
-            _state.value = ConnectionState.Closed
-            clearPending("Disconnected")
+            connectLock.withLock {
+                shouldReconnect = false
+                reconnectJob?.cancel()
+                reconnectJob = null
+                heartbeatWatchJob?.cancel()
+                heartbeatWatchJob = null
+                session?.close()
+                session = null
+                _state.value = ConnectionState.Closed
+                clearPending("Disconnected")
+            }
         }
     }
 
@@ -309,7 +323,7 @@ class HermesWsClient(
                         if (response.error != null) {
                             FileLogger.w("HermesWsClient", "JSON-RPC error id=${response.id}: ${response.error.code} ${response.error.message}")
                             deferred.completeExceptionally(
-                                Exception("JSON-RPC error ${response.error.code}: ${response.error.message}")
+                                JsonRpcException(response.error.code, response.error.message)
                             )
                         } else {
                             deferred.complete(response.result ?: JsonObject(emptyMap()))

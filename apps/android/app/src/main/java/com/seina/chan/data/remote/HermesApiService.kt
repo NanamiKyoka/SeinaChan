@@ -14,6 +14,8 @@ import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import io.ktor.http.isSuccess
+import io.ktor.client.statement.bodyAsText
 
 @Serializable
 data class HermesStatus(
@@ -135,10 +137,22 @@ class HermesApiService(
                 header("X-Hermes-Session-Token", sessionToken)
             }
             FileLogger.d("HermesApiService", "GET $path -> status=${response.status}")
-            response.body()
+            if (response.status.isSuccess()) {
+                response.body()
+            } else {
+                val body = runCatching { response.body<String>() }.getOrNull()
+                when (response.status.value) {
+                    401 -> throw ApiError.AuthError()
+                    404 -> throw ApiError.NotFound("资源不存在: $path")
+                    in 500..599 -> throw ApiError.ServerError(response.status.value, body)
+                    else -> throw ApiError.Unknown("HTTP ${response.status.value} for GET $path")
+                }
+            }
+        } catch (e: ApiError) {
+            throw e
         } catch (e: Exception) {
             FileLogger.e("HermesApiService", "GET $path failed", e)
-            throw e
+            throw ApiError.NetworkError(e)
         }
     }
 
@@ -151,13 +165,24 @@ class HermesApiService(
                 setBody(body)
             }
             FileLogger.d("HermesApiService", "PATCH $path -> status=${response.status}")
-            response.body()
+            if (response.status.isSuccess()) {
+                response.body()
+            } else {
+                val bodyText = runCatching { response.body<String>() }.getOrNull()
+                when (response.status.value) {
+                    401 -> throw ApiError.AuthError()
+                    404 -> throw ApiError.NotFound("资源不存在: $path")
+                    in 500..599 -> throw ApiError.ServerError(response.status.value, bodyText)
+                    else -> throw ApiError.Unknown("HTTP ${response.status.value} for PATCH $path")
+                }
+            }
+        } catch (e: ApiError) {
+            throw e
         } catch (e: Exception) {
             FileLogger.e("HermesApiService", "PATCH $path failed", e)
-            throw e
+            throw ApiError.NetworkError(e)
         }
     }
-
     private suspend fun delete(path: String): Boolean {
         FileLogger.d("HermesApiService", "DELETE $path")
         return try {
@@ -165,14 +190,24 @@ class HermesApiService(
                 header("X-Hermes-Session-Token", sessionToken)
             }
             FileLogger.d("HermesApiService", "DELETE $path -> status=${response.status}")
-            response.status.value in 200..299
+            if (response.status.isSuccess()) {
+                true
+            } else {
+                val body = runCatching { response.body<String>() }.getOrNull()
+                when (response.status.value) {
+                    401 -> throw ApiError.AuthError()
+                    404 -> throw ApiError.NotFound("资源不存在: $path")
+                    in 500..599 -> throw ApiError.ServerError(response.status.value, body)
+                    else -> throw ApiError.Unknown("HTTP ${response.status.value} for DELETE $path")
+                }
+            }
+        } catch (e: ApiError) {
+            throw e
         } catch (e: Exception) {
             FileLogger.e("HermesApiService", "DELETE $path failed", e)
-            throw e
+            throw ApiError.NetworkError(e)
         }
     }
-
-    suspend fun getStatus(): HermesStatus = get("/api/status")
     suspend fun getSessions(limit: Int = 20, offset: Int = 0): SessionsResponse = get("/api/sessions?limit=$limit&offset=$offset")
     suspend fun getSessionMessages(sessionId: String): MessagesResponse = get("/api/sessions/$sessionId/messages")
     suspend fun getModelInfo(): ModelInfo = get("/api/model/info")
@@ -187,13 +222,24 @@ class HermesApiService(
                 setBody(assignment)
             }
             FileLogger.d("HermesApiService", "POST /api/model/set -> status=${response.status}")
-            response.body()
+            if (response.status.isSuccess()) {
+                response.body()
+            } else {
+                val body = runCatching { response.body<String>() }.getOrNull()
+                when (response.status.value) {
+                    401 -> throw ApiError.AuthError()
+                    404 -> throw ApiError.NotFound("资源不存在: /api/model/set")
+                    in 500..599 -> throw ApiError.ServerError(response.status.value, body)
+                    else -> throw ApiError.Unknown("HTTP ${response.status.value} for POST /api/model/set")
+                }
+            }
+        } catch (e: ApiError) {
+            throw e
         } catch (e: Exception) {
             FileLogger.e("HermesApiService", "POST /api/model/set failed", e)
-            throw e
+            throw ApiError.NetworkError(e)
         }
     }
-
     suspend fun deleteSession(sessionId: String): Boolean =
         delete("/api/sessions/$sessionId")
 

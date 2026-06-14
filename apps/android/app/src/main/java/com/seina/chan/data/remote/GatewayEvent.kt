@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonContentPolymorphicSerializer
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
+import com.seina.chan.util.FileLogger
 import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable(GatewayEventSerializer::class)
@@ -126,6 +127,24 @@ sealed class GatewayEvent {
     data class ErrorEvent(
         val message: String
     ) : GatewayEvent()
+
+    @Serializable
+    @SerialName("__unknown__")
+    data class UnknownEvent(val type: String = "") : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.STATUS_UPDATE)
+    data class StatusUpdate(
+        val kind: String = "",
+        val text: String = ""
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName("__unhandled__")
+    data class UnhandledEvent(
+        val eventType: String = "",
+        val rawPayload: JsonElement? = null
+    ) : GatewayEvent()
 }
 
 /**
@@ -153,7 +172,25 @@ object GatewayEventSerializer : JsonContentPolymorphicSerializer<GatewayEvent>(G
             HermesEventTypes.SECRET_REQUEST -> GatewayEvent.SecretRequest.serializer()
             HermesEventTypes.REVIEW_SUMMARY -> GatewayEvent.ReviewSummary.serializer()
             HermesEventTypes.ERROR -> GatewayEvent.ErrorEvent.serializer()
-            else -> throw IllegalArgumentException("Unknown event type: $eventType")
+            HermesEventTypes.STATUS_UPDATE -> GatewayEvent.StatusUpdate.serializer()
+            // 以下事件类型仅记录，不进行业务处理
+            HermesEventTypes.NOTIFICATION_SHOW,
+            HermesEventTypes.NOTIFICATION_CLEAR,
+            HermesEventTypes.BACKGROUND_COMPLETE,
+            HermesEventTypes.SKIN_CHANGED,
+            HermesEventTypes.SUBAGENT_START,
+            HermesEventTypes.SUBAGENT_THINKING,
+            HermesEventTypes.SUBAGENT_PROGRESS,
+            HermesEventTypes.SUBAGENT_TOOL,
+            HermesEventTypes.SUBAGENT_COMPLETE,
+            HermesEventTypes.VOICE_TRANSCRIPT,
+            HermesEventTypes.VOICE_STATUS,
+            HermesEventTypes.BROWSER_PROGRESS,
+            HermesEventTypes.TERMINAL_READ_REQUEST -> GatewayEvent.UnhandledEvent.serializer()
+            else -> {
+                FileLogger.w("GatewayEventSerializer", "未知事件类型: $eventType")
+                GatewayEvent.UnknownEvent.serializer()
+            }
         }
     }
 }

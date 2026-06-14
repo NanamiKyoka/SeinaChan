@@ -11,6 +11,8 @@ import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.util.FileLogger
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
+import com.seina.chan.data.remote.ApiError
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 
@@ -48,19 +50,32 @@ class ConnectionRepository(
         val urls = parseConnectionUrls(ip, port)
         val url = "${urls.httpBaseUrl}/api/status"
         FileLogger.i("ConnectionRepository", "testConnection() url=$url")
-        return try {
-            val response = client.get(url)
-            if (response.status.value in 200..299) {
-                FileLogger.i("ConnectionRepository", "testConnection() succeeded")
-                Result.success("连接成功")
-            } else {
-                FileLogger.e("ConnectionRepository", "testConnection() failed: HTTP ${response.status.value}")
-                Result.failure(Exception("HTTP ${response.status.value}"))
+        var lastError: Exception? = null
+        repeat(3) { attempt ->
+            try {
+                val response = client.get(url)
+                if (response.status.value in 200..299) {
+                    FileLogger.i("ConnectionRepository", "testConnection() succeeded")
+                    return Result.success("连接成功")
+                } else {
+                    FileLogger.e("ConnectionRepository", "testConnection() failed: HTTP ${response.status.value}")
+                    return Result.failure(Exception("HTTP ${response.status.value}"))
+                }
+            } catch (e: ApiError.Timeout) {
+                FileLogger.w("ConnectionRepository", "testConnection timeout (attempt ${attempt + 1})")
+                lastError = e
+                if (attempt < 2) delay(500)
+            } catch (e: ApiError.NetworkError) {
+                FileLogger.w("ConnectionRepository", "testConnection network error (attempt ${attempt + 1})", e)
+                lastError = e
+                if (attempt < 2) delay(500)
+            } catch (e: Exception) {
+                FileLogger.e("ConnectionRepository", "testConnection() exception (attempt ${attempt + 1})", e)
+                lastError = e
+                if (attempt < 2) delay(500)
             }
-        } catch (e: Exception) {
-            FileLogger.e("ConnectionRepository", "testConnection() exception", e)
-            Result.failure(e)
         }
+        return Result.failure(lastError ?: Exception("testConnection failed"))
     }
 
     suspend fun disconnect() {
@@ -71,47 +86,60 @@ class ConnectionRepository(
 
     suspend fun saveConfig(config: ConnectionConfig) {
         FileLogger.i("ConnectionRepository", "saveConfig() ip=${config.ip}, port=${config.port}")
-        dataStore.edit { prefs ->
-            prefs[IP_KEY] = config.ip
-            prefs[PORT_KEY] = config.port
-            prefs[TOKEN_KEY] = config.token
+        try {
+            dataStore.edit { prefs ->
+                prefs[IP_KEY] = config.ip
+                prefs[PORT_KEY] = config.port
+                prefs[TOKEN_KEY] = config.token
+            }
+        } catch (e: Exception) {
+            FileLogger.e("ConnectionRepository", "保存配置失败", e)
         }
     }
 
     suspend fun loadConfig(): ConnectionConfig? {
         FileLogger.i("ConnectionRepository", "loadConfig() called")
-        val prefs = dataStore.data.first()
-        val ip = prefs[IP_KEY]
-        val port = prefs[PORT_KEY]
-        val token = prefs[TOKEN_KEY] ?: ""
-        return if (!ip.isNullOrBlank() && !port.isNullOrBlank()) {
-            FileLogger.i("ConnectionRepository", "loadConfig() found new config")
-            ConnectionConfig(ip, port, token)
-        } else {
-            val baseUrl = prefs[BASE_URL_KEY]
-            if (!baseUrl.isNullOrBlank()) {
-                FileLogger.i("ConnectionRepository", "loadConfig() found legacy baseUrl=$baseUrl, parsing...")
-                val parsed = parseLegacyBaseUrl(baseUrl)
-                if (parsed != null) {
-                    ConnectionConfig(parsed.first, parsed.second, token)
+        return try {
+            val prefs = dataStore.data.first()
+            val ip = prefs[IP_KEY]
+            val port = prefs[PORT_KEY]
+            val token = prefs[TOKEN_KEY] ?: ""
+            if (!ip.isNullOrBlank() && !port.isNullOrBlank()) {
+                FileLogger.i("ConnectionRepository", "loadConfig() found new config")
+                ConnectionConfig(ip, port, token)
+            } else {
+                val baseUrl = prefs[BASE_URL_KEY]
+                if (!baseUrl.isNullOrBlank()) {
+                    FileLogger.i("ConnectionRepository", "loadConfig() found legacy baseUrl=$baseUrl, parsing...")
+                    val parsed = parseLegacyBaseUrl(baseUrl)
+                    if (parsed != null) {
+                        ConnectionConfig(parsed.first, parsed.second, token)
+                    } else {
+                        FileLogger.w("ConnectionRepository", "loadConfig() failed to parse legacy baseUrl")
+                        null
+                    }
                 } else {
-                    FileLogger.w("ConnectionRepository", "loadConfig() failed to parse legacy baseUrl")
+                    FileLogger.i("ConnectionRepository", "loadConfig() no config found")
                     null
                 }
-            } else {
-                FileLogger.i("ConnectionRepository", "loadConfig() no config found")
-                null
             }
+        } catch (e: Exception) {
+            FileLogger.e("ConnectionRepository", "加载配置失败", e)
+            null
         }
     }
 
     suspend fun clearConfig() {
         FileLogger.i("ConnectionRepository", "clearConfig() called")
-        dataStore.edit { prefs ->
-            prefs.remove(IP_KEY)
-            prefs.remove(PORT_KEY)
-            prefs.remove(TOKEN_KEY)
-            prefs.remove(BASE_URL_KEY)
+        try {
+            dataStore.edit { prefs ->
+                prefs.remove(IP_KEY)
+                prefs.remove(PORT_KEY)
+                prefs.remove(TOKEN_KEY)
+                prefs.remove(BASE_URL_KEY)
+            }
+        } catch (e: Exception) {
+            FileLogger.e("ConnectionRepository", "清除配置失败", e)
         }
     }
 
@@ -145,19 +173,32 @@ class ConnectionRepository(
     }
 
     suspend fun saveLastDbSessionId(sessionId: String) {
-        dataStore.edit { prefs ->
-            prefs[LAST_DB_SESSION_ID_KEY] = sessionId
+        try {
+            dataStore.edit { prefs ->
+                prefs[LAST_DB_SESSION_ID_KEY] = sessionId
+            }
+        } catch (e: Exception) {
+            FileLogger.e("ConnectionRepository", "保存 lastDbSessionId 失败", e)
         }
     }
 
     suspend fun loadLastDbSessionId(): String? {
-        val prefs = dataStore.data.first()
-        return prefs[LAST_DB_SESSION_ID_KEY]
+        return try {
+            val prefs = dataStore.data.first()
+            prefs[LAST_DB_SESSION_ID_KEY]
+        } catch (e: Exception) {
+            FileLogger.e("ConnectionRepository", "加载 lastDbSessionId 失败", e)
+            null
+        }
     }
 
     suspend fun clearLastDbSessionId() {
-        dataStore.edit { prefs ->
-            prefs.remove(LAST_DB_SESSION_ID_KEY)
+        try {
+            dataStore.edit { prefs ->
+                prefs.remove(LAST_DB_SESSION_ID_KEY)
+            }
+        } catch (e: Exception) {
+            FileLogger.e("ConnectionRepository", "清除 lastDbSessionId 失败", e)
         }
     }
 

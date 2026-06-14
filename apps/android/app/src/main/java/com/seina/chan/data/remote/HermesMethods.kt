@@ -33,4 +33,20 @@ object HermesEventTypes {
     const val SECRET_REQUEST = "secret.request"
     const val REVIEW_SUMMARY = "review.summary"
     const val ERROR = "error"
+
+    // 新增事件类型（实现向前兼容）
+    const val STATUS_UPDATE = "status.update"
+    const val NOTIFICATION_SHOW = "notification.show"
+    const val NOTIFICATION_CLEAR = "notification.clear"
+    const val BACKGROUND_COMPLETE = "background.complete"
+    const val SKIN_CHANGED = "skin.changed"
+    const val SUBAGENT_START = "subagent.start"
+    const val SUBAGENT_THINKING = "subagent.thinking"
+    const val SUBAGENT_PROGRESS = "subagent.progress"
+    const val SUBAGENT_TOOL = "subagent.tool"
+    const val SUBAGENT_COMPLETE = "subagent.complete"
+    const val VOICE_TRANSCRIPT = "voice.transcript"
+    const val VOICE_STATUS = "voice.status"
+    const val BROWSER_PROGRESS = "browser.progress"
+    const val TERMINAL_READ_REQUEST = "terminal.read.request"
 }

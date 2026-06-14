@@ -271,7 +271,7 @@ class ChatRepository(
 
     suspend fun respondApproval(requestId: String, approved: Boolean) {
         val params = buildJsonObject {
-            put("requestId", requestId)
+            put("id", requestId)
             put("approved", approved)
         }
         wsClient.request(HermesMethods.APPROVAL_RESPOND, params)
@@ -279,24 +279,27 @@ class ChatRepository(
 
     suspend fun respondClarify(requestId: String, response: String) {
         val params = buildJsonObject {
-            put("requestId", requestId)
-            put("response", response)
+            put("id", requestId)
+            put("answer", response)
         }
         wsClient.request(HermesMethods.CLARIFY_RESPOND, params)
     }
 
     suspend fun respondSecret(requestId: String, secret: String) {
         val params = buildJsonObject {
-            put("requestId", requestId)
-            put("secret", secret)
+            put("id", requestId)
+            put("value", secret)
         }
         wsClient.request(HermesMethods.SECRET_RESPOND, params)
     }
 
-    suspend fun stopGenerating() {
+    suspend fun stopGenerating(sessionId: String? = null) {
         FileLogger.i("ChatRepository", "stopGenerating() called")
         try {
-            wsClient.request(HermesMethods.SESSION_INTERRUPT, buildJsonObject {})
+            val params = buildJsonObject {
+                sessionId?.let { put("session_id", it) }
+            }
+            wsClient.request(HermesMethods.SESSION_INTERRUPT, params)
             FileLogger.i("ChatRepository", "stopGenerating() succeeded")
         } catch (e: Exception) {
             FileLogger.e("ChatRepository", "stopGenerating() failed", e)
@@ -496,6 +499,15 @@ class ChatRepository(
                     FileLogger.e("ChatRepository", "Gateway error: ${event.message}")
                     wsClient.setLongRunningMode(false)
                 }
+                is GatewayEvent.UnknownEvent -> {
+                    FileLogger.d("ChatRepository", "未处理事件类型: ${event.type}")
+                }
+                is GatewayEvent.StatusUpdate -> {
+                    FileLogger.d("ChatRepository", "状态更新: kind=${event.kind}, text=${event.text}")
+                }
+                is GatewayEvent.UnhandledEvent -> {
+                    FileLogger.d("ChatRepository", "未处理事件: ${event.eventType}")
+                }
                 else -> Unit
             }
         } catch (e: Exception) {
@@ -574,8 +586,7 @@ class ChatRepository(
         val msgs = _messages.value
         scope.launch {
             try {
-                messageDao.deleteBySessionId(sid)
-                messageDao.upsertAll(msgs.map { it.toEntity(sid) })
+                messageDao.replaceAllForSession(sid, msgs.map { it.toEntity(sid) })
             } catch (e: Exception) {
                 FileLogger.e("ChatRepository", "批量持久化消息失败", e)
             }

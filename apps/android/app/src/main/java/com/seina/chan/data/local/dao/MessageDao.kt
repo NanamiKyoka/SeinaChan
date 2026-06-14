@@ -4,8 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.seina.chan.data.local.entity.MessageEntity
-
 @Dao
 interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -25,4 +25,10 @@ interface MessageDao {
 
     @Query("DELETE FROM messages WHERE sessionId = :sessionId AND createdAt >= :createdAt")
     suspend fun deleteBySessionIdAndCreatedAtAfter(sessionId: String, createdAt: Long)
+
+    @Transaction
+    suspend fun replaceAllForSession(sessionId: String, entities: List<MessageEntity>) {
+        deleteBySessionId(sessionId)
+        upsertAll(entities)
+    }
 }

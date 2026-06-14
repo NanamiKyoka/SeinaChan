@@ -4,10 +4,12 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.seina.chan.data.model.ConnectionProfile
+import com.seina.chan.util.FileLogger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
@@ -56,98 +58,76 @@ class SettingsRepository(
         return json.encodeToString(serializer<List<ConnectionProfile>>(), profiles)
     }
 
-    suspend fun setPageSize(value: Int) {
-        dataStore.edit { prefs ->
-            prefs[PAGE_SIZE_KEY] = value
+    private suspend fun safeEdit(block: suspend (MutablePreferences) -> Unit) {
+        try {
+            dataStore.edit(block)
+        } catch (e: Exception) {
+            FileLogger.e("SettingsRepository", "设置写入失败", e)
         }
+    }
+
+    suspend fun setPageSize(value: Int) {
+        safeEdit { prefs -> prefs[PAGE_SIZE_KEY] = value }
     }
 
     suspend fun setShowToolCalls(value: Boolean) {
-        dataStore.edit { prefs ->
-            prefs[SHOW_TOOL_CALLS_KEY] = value
-        }
+        safeEdit { prefs -> prefs[SHOW_TOOL_CALLS_KEY] = value }
     }
 
     suspend fun setShowReasoning(value: Boolean) {
-        dataStore.edit { prefs ->
-            prefs[SHOW_REASONING_KEY] = value
-        }
+        safeEdit { prefs -> prefs[SHOW_REASONING_KEY] = value }
     }
 
     suspend fun setThemeMode(value: String) {
-        dataStore.edit { prefs ->
-            prefs[THEME_MODE_KEY] = value
-        }
+        safeEdit { prefs -> prefs[THEME_MODE_KEY] = value }
     }
 
     suspend fun setShowTimestamps(value: Boolean) {
-        dataStore.edit { prefs ->
-            prefs[SHOW_TIMESTAMPS_KEY] = value
-        }
+        safeEdit { prefs -> prefs[SHOW_TIMESTAMPS_KEY] = value }
     }
 
     suspend fun setAutoExpandReasoning(value: Boolean) {
-        dataStore.edit { prefs ->
-            prefs[AUTO_EXPAND_REASONING_KEY] = value
-        }
+        safeEdit { prefs -> prefs[AUTO_EXPAND_REASONING_KEY] = value }
     }
 
     suspend fun setAutoExpandTools(value: Boolean) {
-        dataStore.edit { prefs ->
-            prefs[AUTO_EXPAND_TOOLS_KEY] = value
-        }
+        safeEdit { prefs -> prefs[AUTO_EXPAND_TOOLS_KEY] = value }
     }
 
     suspend fun setConnectionIp(value: String) {
-        dataStore.edit { prefs ->
-            prefs[CONNECTION_IP_KEY] = value
-        }
+        safeEdit { prefs -> prefs[CONNECTION_IP_KEY] = value }
     }
 
     suspend fun setConnectionPort(value: String) {
-        dataStore.edit { prefs ->
-            prefs[CONNECTION_PORT_KEY] = value
-        }
+        safeEdit { prefs -> prefs[CONNECTION_PORT_KEY] = value }
     }
 
     suspend fun setConnectionToken(value: String) {
-        dataStore.edit { prefs ->
-            prefs[CONNECTION_TOKEN_KEY] = value
-        }
+        safeEdit { prefs -> prefs[CONNECTION_TOKEN_KEY] = value }
     }
 
     suspend fun setHiddenToolNames(value: Set<String>) {
-        dataStore.edit { prefs ->
-            prefs[HIDDEN_TOOL_NAMES_KEY] = value
-        }
+        safeEdit { prefs -> prefs[HIDDEN_TOOL_NAMES_KEY] = value }
     }
 
     suspend fun setCustomTools(value: Set<String>) {
-        dataStore.edit { prefs ->
-            prefs[CUSTOM_TOOLS_KEY] = value
-        }
+        safeEdit { prefs -> prefs[CUSTOM_TOOLS_KEY] = value }
     }
 
     suspend fun setSelectedModel(value: String) {
-        dataStore.edit { prefs ->
-            prefs[SELECTED_MODEL_KEY] = value
-        }
+        safeEdit { prefs -> prefs[SELECTED_MODEL_KEY] = value }
     }
 
     suspend fun saveConnectionProfiles(profiles: List<ConnectionProfile>) {
-        dataStore.edit { prefs ->
-            prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(profiles)
-        }
+        safeEdit { prefs -> prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(profiles) }
     }
 
     suspend fun addConnectionProfile(profile: ConnectionProfile) {
-        dataStore.edit { prefs ->
-            prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(decodeProfiles(prefs) + profile)
-        }
+        safeEdit { prefs -> prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(decodeProfiles(prefs) + profile) }
     }
 
     suspend fun updateConnectionProfile(profile: ConnectionProfile) {
-        dataStore.edit { prefs ->
+        safeEdit { prefs ->
             prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(
                 decodeProfiles(prefs).map { if (it.id == profile.id) profile else it }
             )
@@ -155,9 +135,7 @@ class SettingsRepository(
     }
 
     suspend fun deleteConnectionProfile(profileId: String) {
-        dataStore.edit { prefs ->
-            prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(decodeProfiles(prefs).filter { it.id != profileId })
-        }
+        safeEdit { prefs -> prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(decodeProfiles(prefs).filter { it.id != profileId }) }
     }
 
     companion object {

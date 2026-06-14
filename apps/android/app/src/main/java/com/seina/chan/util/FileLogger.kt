@@ -2,17 +2,31 @@ package com.seina.chan.util
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileWriter
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.ConcurrentLinkedQueue
+
+/**
+ * 日志上下文，用于追踪当前会话。
+ */
+object LogContext {
+    private val _sessionId = ThreadLocal<String?>()
+    var sessionId: String?
+        get() = _sessionId.get()
+        set(value) = _sessionId.set(value)
+}
 
 object FileLogger {
     private var logsDir: File? = null
-    private val lock = ReentrantLock()
     private var currentDate: String = ""
     private var currentWriter: FileWriter? = null
     private var currentFileIndex: Int = 0
@@ -20,6 +34,39 @@ object FileLogger {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
     private const val MAX_FILE_SIZE = 5L * 1024 * 1024
+
+    private data class LogEntry(
+        val level: String,
+        val tag: String,
+        val message: String,
+        val sessionId: String?,
+        val timestamp: Long,
+        val throwable: Throwable? = null
+    )
+
+    private val logQueue = ConcurrentLinkedQueue<LogEntry>()
+    private val writerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    init {
+        startWriter()
+    }
+
+    private fun startWriter() {
+        writerScope.launch {
+            while (true) {
+                val entries = mutableListOf<LogEntry>()
+                while (true) {
+                    val entry = logQueue.poll() ?: break
+                    entries.add(entry)
+                    if (entries.size >= 10) break
+                }
+                if (entries.isNotEmpty()) {
+                    writeBatch(entries)
+                }
+                delay(200)
+            }
+        }
+    }
 
     fun init(context: Context) {
         val externalDir = context.getExternalFilesDir(null)?.parentFile
@@ -94,28 +141,46 @@ object FileLogger {
         }
     }
 
-    private fun write(level: String, tag: String, message: String, throwable: Throwable? = null) {
-        lock.lock()
+    private fun writeBatch(entries: List<LogEntry>) {
+        val writer = getWriter() ?: return
         try {
-            val writer = getWriter() ?: return
-            val time = timeFormat.format(Date())
-            val thread = Thread.currentThread().name
-            val line = "$time [$level] [$thread] $tag: $message\n"
-            writer.write(line)
-            throwable?.let {
-                writer.write(it.stackTraceToString() + "\n")
+            for (entry in entries) {
+                val time = timeFormat.format(Date(entry.timestamp))
+                val thread = Thread.currentThread().name
+                val sid = entry.sessionId
+                val line = if (sid != null) {
+                    "$time [${entry.level}] [$thread] [$sid] ${entry.tag}: ${entry.message}\n"
+                } else {
+                    "$time [${entry.level}] [$thread] ${entry.tag}: ${entry.message}\n"
+                }
+                writer.write(line)
+                entry.throwable?.let {
+                    writer.write(it.stackTraceToString() + "\n")
+                }
             }
             writer.flush()
         } catch (_: IOException) {
             // Ignore write errors to avoid infinite loops
-        } finally {
-            lock.unlock()
         }
+    }
+
+    private fun write(level: String, tag: String, message: String, throwable: Throwable? = null) {
+        logQueue.add(
+            LogEntry(
+                level = level,
+                tag = tag,
+                message = message,
+                sessionId = LogContext.sessionId,
+                timestamp = System.currentTimeMillis(),
+                throwable = throwable
+            )
+        )
     }
 
     fun v(tag: String, message: String) = write("VERBOSE", tag, message)
     fun d(tag: String, message: String) = write("DEBUG", tag, message)
     fun i(tag: String, message: String) = write("INFO", tag, message)
     fun w(tag: String, message: String) = write("WARN", tag, message)
+    fun w(tag: String, message: String, throwable: Throwable) = write("WARN", tag, message, throwable)
     fun e(tag: String, message: String, throwable: Throwable? = null) = write("ERROR", tag, message, throwable)
 }

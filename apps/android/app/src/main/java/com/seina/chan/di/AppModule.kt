@@ -54,7 +54,7 @@ object AppModule {
         install(WebSockets)
         install(Logging) {
             logger = Logger.ANDROID
-            level = LogLevel.ALL
+            level = LogLevel.HEADERS
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 30_000
