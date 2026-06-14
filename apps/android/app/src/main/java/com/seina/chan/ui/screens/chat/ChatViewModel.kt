@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
 import com.seina.chan.data.model.SlashCommand
 import com.seina.chan.data.remote.HermesMethods
@@ -227,13 +228,42 @@ class ChatViewModel @Inject constructor(
         val result = sessionRepository.createSession()
         currentDbSessionId = result.storedSessionId
         currentWsSessionId = result.sid
+        // 创建全新会话时清空旧会话残留的消息
+        chatRepository.clearMessages()
         try {
             connectionRepository.saveLastDbSessionId(currentDbSessionId)
         } catch (e: Exception) {
             FileLogger.w("ChatViewModel", "ensureSession() failed to save dbSessionId: ${e.message}")
         }
         FileLogger.i("ChatViewModel", "ensureSession() created dbId=${result.storedSessionId}, sid=${result.sid}")
-        return currentDbSessionId
+    }
+
+    /**
+     * 确保 WebSocket 会话已恢复且可用。
+     * 如果当前 wsSessionId 有效则立即返回；否则等待 WebSocket 变为 Open 后尝试 resume。
+     * 仅在会话已被服务端彻底清理（已不存在）且 resume 明确失败时才创建新会话。
+     * @return true 表示已有可用的 wsSessionId，false 表示全部恢复手段均失败
+     */
+    private suspend fun ensureWsSessionReady(timeoutMs: Long = 15_000): Boolean {
+        if (currentWsSessionId.isNotEmpty()) return true
+        if (currentDbSessionId.isEmpty()) return false
+        try {
+            withTimeout(timeoutMs) {
+                wsClient.state.first { it is ConnectionState.Open }
+            }
+        } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+            FileLogger.w("ChatViewModel", "ensureWsSessionReady() timed out waiting for WebSocket")
+            return false
+        }
+        return try {
+            val sid = sessionRepository.resumeSession(currentDbSessionId)
+            currentWsSessionId = sid
+            FileLogger.i("ChatViewModel", "ensureWsSessionReady() resumed sid=$sid")
+            true
+        } catch (e: Exception) {
+            FileLogger.e("ChatViewModel", "ensureWsSessionReady() resume failed: ${e.message}", e)
+            false
+        }
     }
 
     suspend fun resumeSession(): Result<String> {
@@ -281,18 +311,14 @@ class ChatViewModel @Inject constructor(
         _inputState.update { it.copy(isLoading = true, error = null, selectedImages = emptyList(), selectedVideo = null, selectedFiles = emptyList()) }
         viewModelScope.launch {
             try {
-                if (currentDbSessionId.isEmpty()) {
-                    ensureSession()
-                } else {
-                    try {
-                        val sid = sessionRepository.resumeSession(currentDbSessionId)
-                        currentWsSessionId = sid
-                        FileLogger.i("ChatViewModel", "sendMessage() resumeSession succeeded, sid=$sid")
-                    } catch (e: Exception) {
-                        FileLogger.w("ChatViewModel", "sendMessage() resumeSession failed, will recreate session: ${e.message}")
-                        currentDbSessionId = ""
-                        currentWsSessionId = ""
+                // 确保有可用的 wsSessionId；优先等待重连并 resume，若彻底失败则仅创建
+                // 新会话作为最终 fallback，不再在中间状态（WebSocket 未就绪）时盲目创建新会话
+                if (currentDbSessionId.isEmpty() || !ensureWsSessionReady()) {
+                    if (currentDbSessionId.isEmpty()) {
                         ensureSession()
+                    } else {
+                        _inputState.update { it.copy(isLoading = false, error = "会话恢复失败，请稍后重试") }
+                        return@launch
                     }
                 }
                 if (video != null) {
@@ -403,18 +429,12 @@ class ChatViewModel @Inject constructor(
         _inputState.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
             try {
-                if (currentDbSessionId.isEmpty()) {
-                    ensureSession()
-                } else {
-                    try {
-                        val sid = sessionRepository.resumeSession(currentDbSessionId)
-                        currentWsSessionId = sid
-                        FileLogger.i("ChatViewModel", "sendImage() resumeSession succeeded, sid=$sid")
-                    } catch (e: Exception) {
-                        FileLogger.w("ChatViewModel", "sendImage() resumeSession failed, will recreate session: ${e.message}")
-                        currentDbSessionId = ""
-                        currentWsSessionId = ""
+                if (currentDbSessionId.isEmpty() || !ensureWsSessionReady()) {
+                    if (currentDbSessionId.isEmpty()) {
                         ensureSession()
+                    } else {
+                        _inputState.update { it.copy(isLoading = false, error = "会话恢复失败，请稍后重试") }
+                        return@launch
                     }
                 }
                 chatRepository.sendImage(uri, context.contentResolver, currentWsSessionId, currentDbSessionId)

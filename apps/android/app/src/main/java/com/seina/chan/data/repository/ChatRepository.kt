@@ -57,21 +57,9 @@ class ChatRepository(
             handleEvent(event)
         }.launchIn(scope)
 
-        wsClient.state.onEach { state ->
-            if (state is com.seina.chan.data.remote.ConnectionState.Open && currentSessionId != null) {
-                FileLogger.i("ChatRepository", "WebSocket reconnected, auto-resuming session=$currentSessionId")
-                try {
-                    val params = kotlinx.serialization.json.buildJsonObject {
-                        put("session_id", currentSessionId!!)
-                    }
-                    wsClient.request(HermesMethods.SESSION_RESUME, params)
-                    FileLogger.i("ChatRepository", "Auto-resume succeeded for session=$currentSessionId")
-                } catch (e: Exception) {
-                    FileLogger.e("ChatRepository", "Auto-resume failed for session=$currentSessionId", e)
-                    currentSessionId = null
-                }
-            }
-        }.launchIn(scope)
+
+        // Auto-resume 已由 ChatViewModel 统一管理，此处不重复发送 SESSION_RESUME，
+        // 避免与 ViewModel 并发发送导致服务端状态不一致
     }
 
     /**

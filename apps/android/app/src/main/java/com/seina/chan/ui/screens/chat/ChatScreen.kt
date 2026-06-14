@@ -5,10 +5,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,8 +43,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -60,6 +61,7 @@ import com.seina.chan.ui.components.dialogs.SecretDialog
 import com.seina.chan.ui.screens.sessions.SessionListScreen
 import com.seina.chan.ui.theme.Spacing
 import com.seina.chan.ui.theme.TextStyles
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -93,6 +95,16 @@ fun ChatScreen(
         }
     }
 
+    // 输入法弹出时自动滚动到底部，避免键盘遮挡最新消息
+    val density = LocalDensity.current
+    val isKeyboardVisible = WindowInsets.ime.getBottom(density) > 0
+
+    LaunchedEffect(isKeyboardVisible) {
+        if (isKeyboardVisible && uiState.messages.isNotEmpty()) {
+            delay(150L) // 等待键盘动画完成
+            listState.animateScrollToItem(uiState.messages.size - 1)
+        }
+    }
     LaunchedEffect(currentSessionId) {
         if (currentSessionId.isNotEmpty()) {
             viewModel.loadMessages(currentSessionId)
