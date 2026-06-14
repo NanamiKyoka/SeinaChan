@@ -573,8 +573,11 @@ class ChatViewModel @Inject constructor(
                 FileLogger.i("ChatViewModel", "loadMessages() fetched ${history.size} messages from server")
                 val finalMessages = rpcResumeMessages?.let { (rpcSid, rpcMsgs) ->
                     if (rpcSid == dbSessionId && rpcMsgs.size > history.size) {
-                        FileLogger.w("ChatViewModel", "loadMessages() RPC returned ${rpcMsgs.size} messages, REST returned only ${history.size}, using RPC messages")
-                        rpcMsgs
+                        // REST 消息有完整 tool call 数据，保留为基础；
+                        // RPC 多出的消息（纯文本格式）补在末尾
+                        val extra = rpcMsgs.drop(history.size)
+                        FileLogger.w("ChatViewModel", "loadMessages() REST ${history.size} + RPC extra ${extra.size} = ${history.size + extra.size} total")
+                        history + extra
                     } else null
                 } ?: history
                 chatRepository.setMessages(finalMessages)

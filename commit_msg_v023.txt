@@ -1,0 +1,5 @@
+fix(session): REST-RPC 合并策略，REST 为基础 RPC 额外消息补末尾
+
+REST 消息保留完整 tool call 数据，RPC 中 REST 未覆盖的消息补在末尾。
+同时解决消息丢失和 tool call 显示两个问题。
+版本号 0.2.2 -> 0.2.3
