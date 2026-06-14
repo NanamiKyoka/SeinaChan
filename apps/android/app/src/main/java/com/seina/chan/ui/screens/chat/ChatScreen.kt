@@ -302,9 +302,11 @@ fun ChatScreen(
                                 drawerState.close()
                             }
                         },
-                        onNewSession = { newSessionId ->
-                            currentSessionId = newSessionId
-                            scope.launch { drawerState.close() }
+                        onNewSession = { _ ->
+                            scope.launch {
+                                currentSessionId = viewModel.ensureSession(forceNew = true)
+                                drawerState.close()
+                            }
                         },
                         onReconfigure = {
                             scope.launch { drawerState.close() }

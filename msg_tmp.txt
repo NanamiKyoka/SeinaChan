@@ -1,0 +1,1 @@
+fix(session): 从会话列表新建会话时走 ensureSession(forceNew) 完整初始化
