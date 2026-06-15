@@ -117,12 +117,6 @@ fun MessageBubble(
                         shape = AppShapes.lg
                     )
                     .padding(12.dp)
-                    .pointerInput(Unit) {
-                        detectTapGestures(onLongPress = { offset ->
-                            pressOffset = offset
-                            showMenu = true
-                        })
-                    }
             ) {
                 if (message.isStreaming && message.content.isEmpty() && message.imageUrl == null) {
                     TypingIndicator()
@@ -164,6 +158,17 @@ fun MessageBubble(
                     }
                     contentColumn()
                 }
+                // 透明覆盖层承接长按手势，避免 ClickableText 拦截事件导致 onLongPress 不触发
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures(onLongPress = { offset ->
+                                pressOffset = offset
+                                showMenu = true
+                            })
+                        }
+                )
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
