@@ -34,7 +34,7 @@ import javax.inject.Inject
 import com.seina.chan.data.model.SlashCommand
 import com.seina.chan.data.remote.HermesMethods
 import com.seina.chan.data.remote.GatewayEvent
-import com.seina.chan.data.remote.ApiError
+
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -583,18 +583,10 @@ class ChatViewModel @Inject constructor(
                 chatRepository.setMessages(finalMessages)
                 _inputState.update { it.copy(isLoading = false, error = null) }
                 lastLoadedSessionId = dbSessionId
-            } catch (e: ApiError.NotFound) {
+            } catch (e: Exception) {
                 FileLogger.i("ChatViewModel", "loadMessages() no messages for new session $dbSessionId")
                 lastLoadedSessionId = dbSessionId
                 _inputState.update { it.copy(isLoading = false, error = null) }
-            } catch (e: Exception) {
-                FileLogger.e("ChatViewModel", "loadMessages() server fetch failed", e)
-                lastLoadedSessionId = dbSessionId
-                if (chatRepository.messages.value.isEmpty()) {
-                    _inputState.update { it.copy(isLoading = false, error = "加载历史消息失败: ${e.message}") }
-                } else {
-                    _inputState.update { it.copy(isLoading = false) }
-                }
             }
         }
     }

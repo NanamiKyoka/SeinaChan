@@ -9,7 +9,6 @@ import androidx.room.Room
 import com.seina.chan.data.local.AppDatabase
 import com.seina.chan.data.local.dao.MessageDao
 import com.seina.chan.data.local.dao.SentImageDao
-import com.seina.chan.data.remote.HermesApiService
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.data.repository.ChatRepository
 import com.seina.chan.data.repository.ConnectionRepository
@@ -24,13 +23,7 @@ import dagger.hilt.components.SingletonComponent
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.logging.ANDROID
-import io.ktor.client.plugins.logging.LogLevel
-import io.ktor.client.plugins.logging.Logger
-import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.plugins.websocket.WebSockets
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import javax.inject.Singleton
 
@@ -47,15 +40,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideHttpClient(json: Json): HttpClient = HttpClient(CIO) {
-        install(ContentNegotiation) {
-            json(json)
-        }
+    fun provideHttpClient(): HttpClient = HttpClient(CIO) {
         install(WebSockets)
-        install(Logging) {
-            logger = Logger.ANDROID
-            level = LogLevel.HEADERS
-        }
         install(HttpTimeout) {
             requestTimeoutMillis = 30_000
             connectTimeoutMillis = 30_000
@@ -79,19 +65,11 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideHermesApiService(client: HttpClient): HermesApiService {
-        return HermesApiService(client)
-    }
-
-    @Provides
-    @Singleton
     fun provideConnectionRepository(
         wsClient: HermesWsClient,
-        apiService: HermesApiService,
-        dataStore: DataStore<Preferences>,
-        client: HttpClient
+        dataStore: DataStore<Preferences>
     ): ConnectionRepository {
-        return ConnectionRepository(wsClient, apiService, dataStore, client)
+        return ConnectionRepository(wsClient, dataStore)
     }
 
     @Provides
@@ -120,11 +98,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideSessionRepository(
-        apiService: HermesApiService,
         wsClient: HermesWsClient,
         sentImageDao: SentImageDao
     ): SessionRepository {
-        return SessionRepository(apiService, wsClient, sentImageDao)
+        return SessionRepository(wsClient, sentImageDao)
     }
 
     @Provides
