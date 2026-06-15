@@ -2,12 +2,10 @@ package com.seina.chan.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.seina.chan.data.remote.HermesApiService
 import com.seina.chan.data.model.ConnectionConfig
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.data.remote.HermesMethods
 import com.seina.chan.data.model.ConnectionProfile
-import com.seina.chan.data.remote.ModelAssignment
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SettingsRepository
 import com.seina.chan.util.FileLogger
@@ -18,9 +16,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -63,7 +58,6 @@ data class SettingsUiState(
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val connectionRepository: ConnectionRepository,
-    private val apiService: HermesApiService,
     private val wsClient: HermesWsClient
 ) : ViewModel() {
 
@@ -147,12 +141,20 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingModels = true, modelError = null) }
             try {
-                val response = apiService.getModelOptions()
+                val result = wsClient.request(HermesMethods.MODEL_OPTIONS)
                 val models = mutableListOf<ModelOption>()
-                response.providers.filter { it.authenticated && it.models.isNotEmpty() }.forEach { provider ->
-                    provider.models.forEach { modelId ->
-                        val display = "${provider.name ?: provider.slug} / $modelId"
-                        models.add(ModelOption(provider.slug, display, modelId))
+                val providersArray = result.jsonObject["providers"]?.jsonArray
+                providersArray?.forEach { providerElement ->
+                    val providerObj = providerElement.jsonObject
+                    val authenticated = providerObj["authenticated"]?.jsonPrimitive?.content?.toBoolean() ?: false
+                    val modelsArray = providerObj["models"]?.jsonArray
+                    if (authenticated && modelsArray != null && modelsArray.isNotEmpty()) {
+                        val slug = providerObj["slug"]?.jsonPrimitive?.content ?: ""
+                        val name = providerObj["name"]?.jsonPrimitive?.content ?: slug
+                        modelsArray.forEach { modelElement ->
+                            val modelId = modelElement.jsonPrimitive.content
+                            models.add(ModelOption(slug, "$name / $modelId", modelId))
+                        }
                     }
                 }
                 _uiState.update {
@@ -181,7 +183,10 @@ class SettingsViewModel @Inject constructor(
             val provider = option?.provider ?: ""
             try {
                 if (provider.isNotBlank() && modelId.isNotBlank()) {
-                    apiService.setModel(ModelAssignment(provider = provider, model = modelId))
+                    wsClient.request(HermesMethods.SLASH_EXEC, buildJsonObject {
+                        put("command", "model")
+                        put("arg", "$provider/$modelId")
+                    })
                     FileLogger.i("SettingsViewModel", "设置模型成功: provider=$provider, model=$modelId")
                 }
             } catch (e: Exception) {

@@ -4,15 +4,11 @@ import com.seina.chan.data.local.dao.SentImageDao
 import com.seina.chan.data.local.entity.SentImageEntity
 import com.seina.chan.data.model.ChatMessage
 import com.seina.chan.data.model.Session
-import com.seina.chan.data.model.SessionSearchResult
 import com.seina.chan.data.model.ToolCallDetail
 import com.seina.chan.data.model.ToolCallStatus
-import com.seina.chan.data.remote.HermesApiService
 import com.seina.chan.data.remote.HermesMethods
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.util.FileLogger
-import com.seina.chan.data.remote.ApiError
-import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.JsonElement
@@ -38,60 +34,67 @@ data class SessionsPageResult(
 )
 
 class SessionRepository(
-    private val apiService: HermesApiService,
     private val wsClient: HermesWsClient,
     private val sentImageDao: SentImageDao
 ) {
     suspend fun fetchSessions(limit: Int = 20, offset: Int = 0): SessionsPageResult {
-        val response = apiService.getSessions(limit = limit, offset = offset)
-        val sessions = response.sessions.map {
+        val result = wsClient.request(HermesMethods.SESSION_LIST, buildJsonObject {
+            put("limit", limit)
+            put("offset", offset)
+        })
+        val sessionsArray = result.jsonObject["sessions"]?.jsonArray
+        val sessions = sessionsArray?.mapNotNull { item ->
+            if (item !is JsonObject) return@mapNotNull null
             Session(
-                id = it.id,
-                title = it.title,
-                preview = it.preview,
-                messageCount = it.messageCount,
-                lastActiveAt = it.lastActiveAt?.toString()
+                id = item["id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                title = item["title"]?.jsonPrimitive?.content ?: "",
+                preview = item["preview"]?.jsonPrimitive?.content,
+                messageCount = item["message_count"]?.jsonPrimitive?.content?.toIntOrNull()
+                    ?: item["messageCount"]?.jsonPrimitive?.content?.toIntOrNull()
+                    ?: 0,
+                lastActiveAt = item["last_active"]?.jsonPrimitive?.content
+                    ?: item["lastActiveAt"]?.jsonPrimitive?.content
+                    ?: item["started_at"]?.jsonPrimitive?.content
             )
-        }
-        // 根据返回的数据判断是否还有更多：当本次返回数量达到 limit 时认为可能还有更多
+        } ?: emptyList()
+        val total = result.jsonObject["total"]?.jsonPrimitive?.content?.toIntOrNull() ?: sessions.size
         val hasMore = sessions.size >= limit
         return SessionsPageResult(
             sessions = sessions,
-            total = response.total,
+            total = total,
             hasMore = hasMore
         )
     }
 
     suspend fun fetchMessages(sessionId: String): List<ChatMessage> {
-        val raw = retryFetch { apiService.getSessionMessages(sessionId).messages }
+        val result = wsClient.request(HermesMethods.SESSION_HISTORY, buildJsonObject {
+            put("session_id", sessionId)
+        })
+        val messagesArray = result.jsonObject["messages"]?.jsonArray ?: return emptyList()
+        val raw = messagesArray.mapNotNull { it as? JsonObject }
+
         // 收集 tool 角色的结果（按 tool_call_id 索引）
-        val toolResults = raw.filter { it.role == "tool" }.associate { dto ->
-            val resultText = when (dto.content) {
-                is JsonPrimitive -> dto.content.content
-                else -> dto.content?.toString() ?: ""
-            }
-            (dto.toolCallId ?: dto.id.toString()) to resultText
+        val toolResults = raw.filter {
+            it["role"]?.jsonPrimitive?.content == "tool"
+        }.associate { obj ->
+            val resultText = obj["text"]?.jsonPrimitive?.content ?: ""
+            val toolCallId = obj["tool_call_id"]?.jsonPrimitive?.content
+                ?: obj["id"]?.jsonPrimitive?.content ?: ""
+            toolCallId to resultText
         }
 
         // 解析消息（排除 tool 角色，其结果已提取到 toolResults）
-        val nonToolRaw = raw.filter { it.role != "tool" }
-        val parsed = nonToolRaw.flatMap { dto ->
-            val content = when (dto.content) {
-                is JsonPrimitive -> dto.content.content
-                null -> ""
-                else -> ""
-            }
-            val reasoningText = dto.reasoning ?: dto.reasoningContent ?: ""
+        val nonToolRaw = raw.filter { it["role"]?.jsonPrimitive?.content != "tool" }
+        val parsed = nonToolRaw.mapIndexed { index, obj ->
+            val content = obj["text"]?.jsonPrimitive?.content ?: ""
+            val reasoningText = obj["reasoning"]?.jsonPrimitive?.content
+                ?: obj["reasoning_content"]?.jsonPrimitive?.content ?: ""
+            val role = obj["role"]?.jsonPrimitive?.content ?: "assistant"
             val (displayContent, imageUrls) = parseImageContent(content)
-            // 优先使用服务端返回的 timestamp（Unix 秒转毫秒），无则回退到基于 id 的递增时间
-            val createdAt = dto.timestamp?.let { (it * 1000).toLong() }
-                ?: run {
-                    val maxId = nonToolRaw.maxOfOrNull { it.id } ?: 0
-                    System.currentTimeMillis() - (maxId - dto.id) * 1000
-                }
+            val createdAt = System.currentTimeMillis() - (nonToolRaw.size - index) * 1000
 
             // 解析 toolCalls 并尝试关联 tool 结果
-            val toolCalls = parseToolCalls(dto.toolCalls).map { call ->
+            val toolCalls = parseToolCalls(obj["tool_calls"]).map { call ->
                 val result = toolResults[call.id]
                 if (result != null && call.result.isBlank()) {
                     call.copy(result = result)
@@ -100,26 +103,26 @@ class SessionRepository(
                 }
             }
 
-            if (imageUrls.size > 1 && dto.role == "user") {
+            if (imageUrls.size > 1 && role == "user") {
                 // 单条消息包含多张图片时拆分为多条，确保每条只带一张图
-                imageUrls.mapIndexed { index, url ->
+                imageUrls.mapIndexed { imgIndex, url ->
                     ChatMessage(
-                        id = "${dto.id}_img_$index",
-                        role = dto.role,
-                        content = if (index == 0) displayContent else "",
+                        id = "${index}_img_$imgIndex",
+                        role = role,
+                        content = if (imgIndex == 0) displayContent else "",
                         isStreaming = false,
                         reasoningText = reasoningText,
                         isReasoning = false,
-                        toolCalls = if (index == 0) toolCalls else emptyList(),
+                        toolCalls = if (imgIndex == 0) toolCalls else emptyList(),
                         imageUrl = url,
-                        createdAt = createdAt + index
+                        createdAt = createdAt + imgIndex
                     )
                 }
             } else {
                 listOf(
                     ChatMessage(
-                        id = dto.id.toString(),
-                        role = dto.role,
+                        id = index.toString(),
+                        role = role,
                         content = displayContent,
                         isStreaming = false,
                         reasoningText = reasoningText,
@@ -130,7 +133,7 @@ class SessionRepository(
                     )
                 )
             }
-        }
+        }.flatten()
 
         // 合并相邻的 assistant 消息（服务端可能将 reasoning/toolCall/content 拆成多条）
         val merged = mutableListOf<ChatMessage>()
@@ -300,35 +303,18 @@ class SessionRepository(
 
     suspend fun deleteSession(sessionId: String) {
         FileLogger.i("SessionRepository", "deleteSession() sessionId=$sessionId")
-        try {
-            val params = buildJsonObject {
-                put("session_id", sessionId)
-            }
-            wsClient.request(HermesMethods.SESSION_CLOSE, params)
-            FileLogger.i("SessionRepository", "session.close sent for sessionId=$sessionId")
-        } catch (e: Exception) {
-            FileLogger.w("SessionRepository", "session.close failed (non-fatal): ${e.message}")
-        }
-        val success = apiService.deleteSession(sessionId)
-        if (!success) {
-            FileLogger.e("SessionRepository", "deleteSession() failed")
-            throw RuntimeException("Failed to delete session")
-        }
+        wsClient.request(HermesMethods.SESSION_DELETE, buildJsonObject {
+            put("session_id", sessionId)
+        })
         FileLogger.i("SessionRepository", "deleteSession() succeeded")
     }
+
     suspend fun renameSession(sessionId: String, title: String) {
         FileLogger.i("SessionRepository", "renameSession() sessionId=$sessionId, title=$title")
-        try {
-            val params = buildJsonObject {
-                put("session_id", sessionId)
-                put("title", title)
-            }
-            wsClient.request(HermesMethods.SESSION_TITLE, params)
-            FileLogger.i("SessionRepository", "session.title RPC succeeded for sessionId=$sessionId")
-        } catch (e: Exception) {
-            FileLogger.w("SessionRepository", "session.title RPC failed, falling back to REST: ${e.message}")
-        }
-        apiService.renameSession(sessionId, title)
+        wsClient.request(HermesMethods.SESSION_TITLE, buildJsonObject {
+            put("session_id", sessionId)
+            put("title", title)
+        })
         FileLogger.i("SessionRepository", "renameSession() succeeded")
     }
 
@@ -360,34 +346,4 @@ class SessionRepository(
         return newSessionId
     }
 
-    suspend fun searchSessions(query: String): List<SessionSearchResult> {
-        FileLogger.i("SessionRepository", "searchSessions() query=$query")
-        val response = apiService.searchSessions(query)
-        return response.sessions.map {
-            SessionSearchResult(
-                sessionId = it.id,
-                title = it.title,
-                previewSnippet = it.snippet ?: it.preview,
-                matchedKeyword = it.keyword
-            )
-        }
-    }
-
-    private suspend fun <T> retryFetch(block: suspend () -> T): T {
-        var lastError: Exception? = null
-        repeat(3) { attempt ->
-            try {
-                return block()
-            } catch (e: ApiError.Timeout) {
-                FileLogger.w("SessionRepository", "fetch timeout (attempt ${attempt + 1})")
-                lastError = e
-                if (attempt < 2) delay(500)
-            } catch (e: ApiError.NetworkError) {
-                FileLogger.w("SessionRepository", "fetch network error (attempt ${attempt + 1})", e)
-                lastError = e
-                if (attempt < 2) delay(500)
-            }
-        }
-        throw lastError ?: Exception("fetch failed")
-    }
 }

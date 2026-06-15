@@ -6,31 +6,21 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.seina.chan.data.model.ConnectionConfig
 import com.seina.chan.data.remote.ConnectionState
-import com.seina.chan.data.remote.HermesApiService
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.util.FileLogger
-import io.ktor.client.HttpClient
-import io.ktor.client.request.get
-import com.seina.chan.data.remote.ApiError
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 
 class ConnectionRepository(
     private val wsClient: HermesWsClient,
-    private val apiService: HermesApiService,
-    private val dataStore: DataStore<Preferences>,
-    private val client: HttpClient
+    private val dataStore: DataStore<Preferences>
 ) {
     val connectionState: StateFlow<ConnectionState> = wsClient.state
 
     suspend fun connect(config: ConnectionConfig): Result<Unit> {
-        val urls = parseConnectionUrls(config.ip, config.port)
-        val wsUrl = urls.wsUrl
-        val httpBaseUrl = urls.httpBaseUrl
-        FileLogger.i("ConnectionRepository", "connect() httpBaseUrl=$httpBaseUrl, wsUrl=$wsUrl")
+        val wsUrl = parseConnectionUrls(config.ip, config.port)
+        FileLogger.i("ConnectionRepository", "connect() wsUrl=$wsUrl")
         return try {
-            apiService.setConfig(httpBaseUrl, config.token)
             val connected = wsClient.connect(wsUrl, config.token)
             if (connected) {
                 wsClient.enableReconnect(true)
@@ -47,35 +37,23 @@ class ConnectionRepository(
     }
 
     suspend fun testConnection(ip: String, port: String): Result<String> {
-        val urls = parseConnectionUrls(ip, port)
-        val url = "${urls.httpBaseUrl}/api/status"
-        FileLogger.i("ConnectionRepository", "testConnection() url=$url")
-        var lastError: Exception? = null
-        repeat(3) { attempt ->
-            try {
-                val response = client.get(url)
-                if (response.status.value in 200..299) {
-                    FileLogger.i("ConnectionRepository", "testConnection() succeeded")
-                    return Result.success("连接成功")
-                } else {
-                    FileLogger.e("ConnectionRepository", "testConnection() failed: HTTP ${response.status.value}")
-                    return Result.failure(Exception("HTTP ${response.status.value}"))
-                }
-            } catch (e: ApiError.Timeout) {
-                FileLogger.w("ConnectionRepository", "testConnection timeout (attempt ${attempt + 1})")
-                lastError = e
-                if (attempt < 2) delay(500)
-            } catch (e: ApiError.NetworkError) {
-                FileLogger.w("ConnectionRepository", "testConnection network error (attempt ${attempt + 1})", e)
-                lastError = e
-                if (attempt < 2) delay(500)
-            } catch (e: Exception) {
-                FileLogger.e("ConnectionRepository", "testConnection() exception (attempt ${attempt + 1})", e)
-                lastError = e
-                if (attempt < 2) delay(500)
+        val wsUrl = parseConnectionUrls(ip, port)
+        FileLogger.i("ConnectionRepository", "testConnection() wsUrl=$wsUrl")
+        return try {
+            val connected = wsClient.connect(wsUrl, "")
+            if (connected) {
+                // 等待一小段时间让 gateway.ready 有机会到达，或直接用连接成功作为判断
+                wsClient.disconnect()
+                FileLogger.i("ConnectionRepository", "testConnection() succeeded")
+                Result.success("连接成功")
+            } else {
+                FileLogger.e("ConnectionRepository", "testConnection() failed")
+                Result.failure(Exception("WebSocket 连接失败"))
             }
+        } catch (e: Exception) {
+            FileLogger.e("ConnectionRepository", "testConnection() exception", e)
+            Result.failure(e)
         }
-        return Result.failure(lastError ?: Exception("testConnection failed"))
     }
 
     suspend fun disconnect() {
@@ -202,30 +180,25 @@ class ConnectionRepository(
         }
     }
 
-    private data class ConnectionUrls(val wsUrl: String, val httpBaseUrl: String)
-
-    private fun parseConnectionUrls(ip: String, port: String): ConnectionUrls {
+    private fun parseConnectionUrls(ip: String, port: String): String {
         val trimmedIp = ip.trim()
-        val (wsScheme, httpScheme, cleanHost) = when {
+        val (wsScheme, cleanHost) = when {
             trimmedIp.startsWith("wss://", ignoreCase = true) ->
-                Triple("wss", "https", trimmedIp.removePrefix("wss://"))
+                Pair("wss", trimmedIp.removePrefix("wss://"))
             trimmedIp.startsWith("ws://", ignoreCase = true) ->
-                Triple("ws", "http", trimmedIp.removePrefix("ws://"))
+                Pair("ws", trimmedIp.removePrefix("ws://"))
             trimmedIp.startsWith("https://", ignoreCase = true) ->
-                Triple("wss", "https", trimmedIp.removePrefix("https://"))
+                Pair("wss", trimmedIp.removePrefix("https://"))
             trimmedIp.startsWith("http://", ignoreCase = true) ->
-                Triple("ws", "http", trimmedIp.removePrefix("http://"))
-            else -> Triple("ws", "http", trimmedIp)
+                Pair("ws", trimmedIp.removePrefix("http://"))
+            else -> Pair("ws", trimmedIp)
         }
         var host = cleanHost.removeSuffix("/")
         // 自动为裸 IPv6 地址添加方括号（域名不含冒号，不受影响）
         if (host.contains(":") && !host.startsWith("[")) {
             host = "[$host]"
         }
-        return ConnectionUrls(
-            wsUrl = "$wsScheme://$host:$port/api/ws",
-            httpBaseUrl = "$httpScheme://$host:$port"
-        )
+        return "$wsScheme://$host:$port/api/ws"
     }
 
     companion object {

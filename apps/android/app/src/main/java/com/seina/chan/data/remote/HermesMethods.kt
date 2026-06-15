@@ -18,6 +18,11 @@ object HermesMethods {
     const val TOOLS_CONFIGURE = "tools.configure"
     const val SECRET_RESPOND = "secret.respond"
     const val COMMANDS_CATALOG = "commands.catalog"
+    const val SESSION_LIST = "session.list"
+    const val SESSION_HISTORY = "session.history"
+    const val SESSION_DELETE = "session.delete"
+    const val MODEL_OPTIONS = "model.options"
+    const val SLASH_EXEC = "slash.exec"
 }
 
 object HermesEventTypes {
