@@ -569,8 +569,9 @@ class ChatViewModel @Inject constructor(
             }
 
             try {
-                val history = sessionRepository.fetchMessages(dbSessionId)
-                FileLogger.i("ChatViewModel", "loadMessages() fetched ${history.size} messages from server")
+                val sid = currentWsSessionId.ifEmpty { dbSessionId }
+                val history = sessionRepository.fetchMessages(sid)
+                FileLogger.i("ChatViewModel", "loadMessages() fetched ${history.size} messages from server (sid=$sid, dbSessionId=$dbSessionId)")
                 val finalMessages = rpcResumeMessages?.let { (rpcSid, rpcMsgs) ->
                     if (rpcSid == dbSessionId && rpcMsgs.size > history.size) {
                         // REST 消息有完整 tool call 数据，保留为基础；
