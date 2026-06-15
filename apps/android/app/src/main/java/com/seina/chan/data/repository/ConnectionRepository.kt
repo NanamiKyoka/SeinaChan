@@ -36,11 +36,11 @@ class ConnectionRepository(
         }
     }
 
-    suspend fun testConnection(ip: String, port: String): Result<String> {
+    suspend fun testConnection(ip: String, port: String, token: String = ""): Result<String> {
         val wsUrl = parseConnectionUrls(ip, port)
         FileLogger.i("ConnectionRepository", "testConnection() wsUrl=$wsUrl")
         return try {
-            val connected = wsClient.connect(wsUrl, "")
+            val connected = wsClient.connect(wsUrl, token)
             if (connected) {
                 // 等待一小段时间让 gateway.ready 有机会到达，或直接用连接成功作为判断
                 wsClient.disconnect()

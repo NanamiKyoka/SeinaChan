@@ -83,9 +83,11 @@ class ConnectViewModel @Inject constructor(
 
     fun testConnection() {
         viewModelScope.launch {
-            val ip = _uiState.value.ip.trim()
-            val port = _uiState.value.port.trim()
-            FileLogger.i("ConnectViewModel", "testConnection() ip=$ip, port=$port")
+            val state = _uiState.value
+            val ip = state.ip.trim()
+            val port = state.port.trim()
+            val token = state.token.trim()
+            FileLogger.i("ConnectViewModel", "testConnection() ip=$ip, port=$port, hasToken=${token.isNotEmpty()}")
 
             if (ip.isBlank() || port.isBlank()) {
                 _uiState.value = _uiState.value.copy(testStatus = TestStatus.Error("请输入 IP 和端口"))
@@ -93,7 +95,7 @@ class ConnectViewModel @Inject constructor(
             }
 
             _uiState.value = _uiState.value.copy(testStatus = TestStatus.Testing)
-            val result = connectionRepository.testConnection(ip, port)
+            val result = connectionRepository.testConnection(ip, port, token)
             if (result.isSuccess) {
                 FileLogger.i("ConnectViewModel", "testConnection() succeeded")
                 _uiState.value = _uiState.value.copy(testStatus = TestStatus.Success(result.getOrDefault("连接成功")))
