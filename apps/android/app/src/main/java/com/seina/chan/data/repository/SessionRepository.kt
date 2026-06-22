@@ -83,29 +83,32 @@ class SessionRepository(
             toolCallId to resultText
         }
 
-        // 收集简化格式的 tool 消息（按出现顺序，用于无 tool_call_id 的 _history_to_messages 格式）
-        val simplifiedToolCalls = mutableListOf<ToolCallDetail>()
-
-        // 解析消息（排除 tool 角色，其结果已提取到 toolResults 或 simplifiedToolCalls）
-        val nonToolRaw = raw.filter { obj ->
+        // 收集简化格式的 tool 消息（按 nonToolRaw 索引分组，tool 关联到前一个非 tool 消息）
+        val simplifiedToolCallGroups = mutableMapOf<Int, MutableList<ToolCallDetail>>()
+        val nonToolRaw = mutableListOf<JsonObject>()
+        for (obj in raw) {
             val isTool = obj["role"]?.jsonPrimitive?.content == "tool"
             if (isTool) {
-                // 简化格式：{role: "tool", name: "bash", context: "(bash) ls"}
                 val name = obj["name"]?.jsonPrimitive?.content
                 if (!name.isNullOrBlank()) {
-                    simplifiedToolCalls.add(
-                        ToolCallDetail(
+                    val targetGroupIdx = nonToolRaw.size - 1
+                    if (targetGroupIdx >= 0) {
+                        val toolCall = ToolCallDetail(
                             id = java.util.UUID.randomUUID().toString(),
                             name = name,
                             status = ToolCallStatus.Success,
                             args = obj["context"]?.jsonPrimitive?.content ?: "",
-                            result = obj["text"]?.jsonPrimitive?.content ?: ""
+                            result = obj["text"]?.jsonPrimitive?.content
+                                ?: obj["context"]?.jsonPrimitive?.content ?: ""
                         )
-                    )
+                        simplifiedToolCallGroups.getOrPut(targetGroupIdx) { mutableListOf() }.add(toolCall)
+                    }
                 }
+            } else {
+                nonToolRaw.add(obj)
             }
-            !isTool
         }
+
         val parsed = nonToolRaw.mapIndexed { index, obj ->
             val content = obj["text"]?.jsonPrimitive?.content ?: ""
             val reasoningText = obj["reasoning"]?.jsonPrimitive?.content
@@ -123,9 +126,8 @@ class SessionRepository(
                     call
                 }
             }
-            // 如果 parseToolCalls 无结果（简化格式），且之前有累积的简化工具调用，则分配给当前 assistant 消息
-            val effectiveToolCalls = if (role == "assistant" && parsedToolCalls.isEmpty() && simplifiedToolCalls.isNotEmpty()) {
-                simplifiedToolCalls.toList().also { simplifiedToolCalls.clear() }
+            val effectiveToolCalls = if (role == "assistant" && parsedToolCalls.isEmpty()) {
+                simplifiedToolCallGroups[index].orEmpty()
             } else {
                 parsedToolCalls
             }
