@@ -73,7 +73,7 @@ class SessionRepository(
         val messagesArray = result.jsonObject["messages"]?.jsonArray ?: return emptyList()
         val raw = messagesArray.mapNotNull { it as? JsonObject }
 
-        // 收集 tool 角色的结果（按 tool_call_id 索引）
+        // 收集 tool 角色的结果（按 tool_call_id 索引，用于原始 OpenAI 格式）
         val toolResults = raw.filter {
             it["role"]?.jsonPrimitive?.content == "tool"
         }.associate { obj ->
@@ -83,8 +83,27 @@ class SessionRepository(
             toolCallId to resultText
         }
 
-        // 解析消息（排除 tool 角色，其结果已提取到 toolResults）
-        val nonToolRaw = raw.filter { it["role"]?.jsonPrimitive?.content != "tool" }
+        // 收集简化格式的 tool 消息（按出现顺序，用于无 tool_call_id 的 _history_to_messages 格式）
+        val simplifiedToolCalls = mutableListOf<ToolCallDetail>()
+
+        // 解析消息（排除 tool 角色，其结果已提取到 toolResults 或 simplifiedToolCalls）
+        val nonToolRaw = raw.filter { obj ->
+            val isTool = obj["role"]?.jsonPrimitive?.content == "tool"
+            if (isTool) {
+                // 简化格式：{role: "tool", name: "bash", context: "(bash) ls"}
+                val name = obj["name"]?.jsonPrimitive?.content
+                if (!name.isNullOrBlank()) {
+                    simplifiedToolCalls.add(
+                        ToolCallDetail(
+                            id = java.util.UUID.randomUUID().toString(),
+                            name = name,
+                            status = ToolCallStatus.Success
+                        )
+                    )
+                }
+            }
+            !isTool
+        }
         val parsed = nonToolRaw.mapIndexed { index, obj ->
             val content = obj["text"]?.jsonPrimitive?.content ?: ""
             val reasoningText = obj["reasoning"]?.jsonPrimitive?.content
@@ -94,13 +113,19 @@ class SessionRepository(
             val createdAt = System.currentTimeMillis() - (nonToolRaw.size - index) * 1000
 
             // 解析 toolCalls 并尝试关联 tool 结果
-            val toolCalls = parseToolCalls(obj["tool_calls"]).map { call ->
+            val parsedToolCalls = parseToolCalls(obj["tool_calls"]).map { call ->
                 val result = toolResults[call.id]
                 if (result != null && call.result.isBlank()) {
                     call.copy(result = result)
                 } else {
                     call
                 }
+            }
+            // 如果 parseToolCalls 无结果（简化格式），且之前有累积的简化工具调用，则分配给当前 assistant 消息
+            val effectiveToolCalls = if (role == "assistant" && parsedToolCalls.isEmpty() && simplifiedToolCalls.isNotEmpty()) {
+                simplifiedToolCalls.toList().also { simplifiedToolCalls.clear() }
+            } else {
+                parsedToolCalls
             }
 
             if (imageUrls.size > 1 && role == "user") {
@@ -113,7 +138,7 @@ class SessionRepository(
                         isStreaming = false,
                         reasoningText = reasoningText,
                         isReasoning = false,
-                        toolCalls = if (imgIndex == 0) toolCalls else emptyList(),
+                        toolCalls = if (imgIndex == 0) effectiveToolCalls else emptyList(),
                         imageUrl = url,
                         createdAt = createdAt + imgIndex
                     )
@@ -127,7 +152,7 @@ class SessionRepository(
                         isStreaming = false,
                         reasoningText = reasoningText,
                         isReasoning = false,
-                        toolCalls = toolCalls,
+                        toolCalls = effectiveToolCalls,
                         imageUrl = imageUrls.firstOrNull(),
                         createdAt = createdAt
                     )
@@ -282,7 +307,7 @@ class SessionRepository(
                 for (item in messagesArray) {
                     if (item !is JsonObject) continue
                     val role = item["role"]?.jsonPrimitive?.content ?: continue
-                    if (role !in setOf("user", "assistant", "tool")) continue
+                    if (role !in setOf("user", "assistant")) continue
                     val text = item["text"]?.jsonPrimitive?.content ?: ""
                     val reasoning = item["reasoning"]?.jsonPrimitive?.content
                         ?: item["reasoning_content"]?.jsonPrimitive?.content ?: ""

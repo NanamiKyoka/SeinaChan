@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -42,6 +44,7 @@ class ChatRepository(
     private val messageDao: MessageDao
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val dbMutex = Mutex()
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -591,10 +594,14 @@ class ChatRepository(
             return
         }
         scope.launch {
-            try {
-                messageDao.upsert(message.toEntity(sid))
-            } catch (e: Exception) {
-                FileLogger.e("ChatRepository", "持久化消息失败: ${message.id}", e)
+            dbMutex.withLock {
+                withContext(Dispatchers.IO) {
+                    try {
+                        messageDao.upsert(message.toEntity(sid))
+                    } catch (e: Exception) {
+                        FileLogger.e("ChatRepository", "持久化消息失败: ${message.id}", e)
+                    }
+                }
             }
         }
     }
@@ -607,10 +614,14 @@ class ChatRepository(
         }
         val msgs = _messages.value
         scope.launch {
-            try {
-                messageDao.replaceAllForSession(sid, msgs.map { it.toEntity(sid) })
-            } catch (e: Exception) {
-                FileLogger.e("ChatRepository", "批量持久化消息失败", e)
+            dbMutex.withLock {
+                withContext(Dispatchers.IO) {
+                    try {
+                        messageDao.replaceAllForSession(sid, msgs.map { it.toEntity(sid) })
+                    } catch (e: Exception) {
+                        FileLogger.e("ChatRepository", "批量持久化消息失败", e)
+                    }
+                }
             }
         }
     }
