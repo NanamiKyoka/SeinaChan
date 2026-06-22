@@ -85,26 +85,38 @@ class SessionRepository(
 
         // 收集简化格式的 tool 消息（按 nonToolRaw 索引分组，tool 关联到前一个非 tool 消息）
         val simplifiedToolCallGroups = mutableMapOf<Int, MutableList<ToolCallDetail>>()
+        var pendingTools = mutableListOf<ToolCallDetail>()
         val nonToolRaw = mutableListOf<JsonObject>()
         for (obj in raw) {
             val isTool = obj["role"]?.jsonPrimitive?.content == "tool"
             if (isTool) {
                 val name = obj["name"]?.jsonPrimitive?.content
                 if (!name.isNullOrBlank()) {
-                    val targetGroupIdx = nonToolRaw.size - 1
-                    if (targetGroupIdx >= 0) {
-                        val toolCall = ToolCallDetail(
-                            id = java.util.UUID.randomUUID().toString(),
-                            name = name,
-                            status = ToolCallStatus.Success,
-                            args = obj["context"]?.jsonPrimitive?.content ?: "",
-                            result = obj["text"]?.jsonPrimitive?.content
-                                ?: obj["context"]?.jsonPrimitive?.content ?: ""
-                        )
-                        simplifiedToolCallGroups.getOrPut(targetGroupIdx) { mutableListOf() }.add(toolCall)
+                    val toolCall = ToolCallDetail(
+                        id = java.util.UUID.randomUUID().toString(),
+                        name = name,
+                        status = ToolCallStatus.Success,
+                        args = obj["context"]?.jsonPrimitive?.content ?: "",
+                        result = obj["text"]?.jsonPrimitive?.content
+                            ?: obj["context"]?.jsonPrimitive?.content ?: ""
+                    )
+                    val prevIdx = nonToolRaw.size - 1
+                    // tool 消息属于前一个 assistant 消息。
+                    // 如果前一个非 tool 条目是 assistant，直接关联到它的分组。
+                    // 否则（user、或空列表），说明调用该 tool 的 assistant 被服务端跳过了，
+                    // 放入 pendingTools 缓冲，等下一个 assistant 出现时一次性分配。
+                    if (prevIdx >= 0 && nonToolRaw[prevIdx]["role"]?.jsonPrimitive?.content == "assistant") {
+                        simplifiedToolCallGroups.getOrPut(prevIdx) { mutableListOf() }.add(toolCall)
+                    } else {
+                        pendingTools.add(toolCall)
                     }
                 }
             } else {
+                // 有 pending 的 tool 且当前消息是 assistant → 把 pending 缓冲分配给这个 assistant
+                if (pendingTools.isNotEmpty() && obj["role"]?.jsonPrimitive?.content == "assistant") {
+                    simplifiedToolCallGroups.getOrPut(nonToolRaw.size) { mutableListOf() }.addAll(pendingTools)
+                    pendingTools.clear()
+                }
                 nonToolRaw.add(obj)
             }
         }
