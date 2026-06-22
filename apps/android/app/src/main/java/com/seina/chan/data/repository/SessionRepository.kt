@@ -97,7 +97,8 @@ class SessionRepository(
                         ToolCallDetail(
                             id = java.util.UUID.randomUUID().toString(),
                             name = name,
-                            status = ToolCallStatus.Success
+                            status = ToolCallStatus.Success,
+                            result = obj["context"]?.jsonPrimitive?.content ?: ""
                         )
                     )
                 }

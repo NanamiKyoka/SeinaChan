@@ -27,9 +27,13 @@ venv/
 ENV/
 .venv/
 
+# tmp
+*tmp*.txt
+*temp*.txt
+
 # IDE
 .idea/
-.trae/
+.omp/
 .vscode/
 *.iml
 .vscode/
