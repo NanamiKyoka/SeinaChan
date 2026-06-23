@@ -303,6 +303,21 @@ class ChatRepository(
         wsClient.request(HermesMethods.PROMPT_SUBMIT, params)
     }
 
+    /**
+     * 插入一条系统消息（用于斜杠命令输出等场景）
+     */
+    suspend fun addSystemMessage(text: String, dbSessionId: String) {
+        currentSessionId = dbSessionId
+        val msg = ChatMessage(
+            id = java.util.UUID.randomUUID().toString(),
+            role = "system",
+            content = text,
+            isStreaming = false
+        )
+        _messages.value += msg
+        persistMessage(msg)
+    }
+
     suspend fun respondApproval(id: String, approved: Boolean, allowPermanent: Boolean = false) {
         val params = buildJsonObject {
             put("request_id", id)

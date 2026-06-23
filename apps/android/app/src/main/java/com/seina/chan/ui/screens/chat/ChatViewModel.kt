@@ -38,6 +38,8 @@ import com.seina.chan.data.remote.GatewayEvent
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
@@ -388,52 +390,74 @@ class ChatViewModel @Inject constructor(
                         ensureSession(forceNew = true)
                     }
                 }
-
-                if (images.isNotEmpty()) {
-                    sendImagesInternal(images)
-                }
-
-                // 文件：先上传到 Gateway，再构建包含文件名和内容的文本
-                val fileBlocks = mutableListOf<String>()
-                if (files.isNotEmpty()) {
-                    for (uri in files) {
-                        try {
-                            val (ref, name, content) = chatRepository.attachFileWithContent(uri, context.contentResolver, currentWsSessionId)
-                            if (content != null) {
-                                fileBlocks.add("📎 $name\n\n$content")
-                            } else {
-                                fileBlocks.add("📎 $name（二进制文件）")
+                // 斜杠命令：通过 slash.exec 执行，不发送给 AI
+                val isSlashCommand = text.startsWith("/") && files.isEmpty()
+                if (isSlashCommand) {
+                    try {
+                        val params = buildJsonObject {
+                            put("session_id", currentWsSessionId)
+                            put("command", text)
+                        }
+                        val result = wsClient.request(HermesMethods.SLASH_EXEC, params)
+                        if (result is kotlinx.serialization.json.JsonObject) {
+                            val output = result["output"]?.jsonPrimitive?.content
+                            if (!output.isNullOrBlank()) {
+                                chatRepository.addSystemMessage(output, currentDbSessionId)
                             }
-                            FileLogger.i("ChatViewModel", "attachFile() succeeded for uri=$uri, ref=$ref, name=$name")
-                        } catch (e: Exception) {
-                            FileLogger.e("ChatViewModel", "attachFile() failed for uri=$uri", e)
+                        }
+                        FileLogger.i("ChatViewModel", "slash.exec succeeded for command=$text")
+                    } catch (e: Exception) {
+                        FileLogger.e("ChatViewModel", "slash.exec failed for command=$text", e)
+                    }
+                    clearQuote()
+                    _editingMessage.value = null
+                    _inputState.update { it.copy(currentInput = "", isLoading = false) }
+                } else {
+                    if (images.isNotEmpty()) {
+                        sendImagesInternal(images)
+                    }
+
+                    // 文件：先上传到 Gateway，再构建包含文件名和内容的文本
+                    val fileBlocks = mutableListOf<String>()
+                    if (files.isNotEmpty()) {
+                        for (uri in files) {
+                            try {
+                                val (ref, name, content) = chatRepository.attachFileWithContent(uri, context.contentResolver, currentWsSessionId)
+                                if (content != null) {
+                                    fileBlocks.add("📎 $name\n\n$content")
+                                } else {
+                                    fileBlocks.add("📎 $name（二进制文件）")
+                                }
+                                FileLogger.i("ChatViewModel", "attachFile() succeeded for uri=$uri, ref=$ref, name=$name")
+                            } catch (e: Exception) {
+                                FileLogger.e("ChatViewModel", "attachFile() failed for uri=$uri", e)
+                            }
                         }
                     }
-                }
 
-                // 构造最终文本：文件块 + 用户文字 + @file: 引用
-                val finalText = buildString {
-                    if (fileBlocks.isNotEmpty()) {
-                        append(fileBlocks.joinToString("\n\n"))
+                    // 构造最终文本：文件块 + 用户文字
+                    val finalText = buildString {
+                        if (fileBlocks.isNotEmpty()) {
+                            append(fileBlocks.joinToString("\n\n"))
+                        }
+                        if (fileBlocks.isNotEmpty() && text.isNotEmpty()) {
+                            append("\n\n")
+                        }
+                        if (text.isNotEmpty()) {
+                            append(text)
+                        }
                     }
-                    if (fileBlocks.isNotEmpty() && text.isNotEmpty()) {
-                        append("\n\n")
-                    }
-                    if (text.isNotEmpty()) {
-                        append(text)
-                    }
-                }
 
-                if (finalText.isNotBlank()) {
-                    chatRepository.sendMessage(finalText, currentWsSessionId, currentDbSessionId, uiState.value.quotedMessage?.id)
-                } else if (images.isNotEmpty()) {
-                    // 纯图片场景：发送空 prompt 触发 assistant 回复
-                    chatRepository.submitPrompt(currentWsSessionId)
+                    if (finalText.isNotBlank()) {
+                        chatRepository.sendMessage(finalText, currentWsSessionId, currentDbSessionId, uiState.value.quotedMessage?.id)
+                    } else if (images.isNotEmpty()) {
+                        // 纯图片场景：发送空 prompt 触发 assistant 回复
+                        chatRepository.submitPrompt(currentWsSessionId)
+                    }
+                    clearQuote()
+                    _editingMessage.value = null
+                    _inputState.update { it.copy(currentInput = "", isLoading = false) }
                 }
-                clearQuote()
-                _editingMessage.value = null
-                _inputState.update { it.copy(currentInput = "", isLoading = false) }
-                FileLogger.i("ChatViewModel", "sendMessage() succeeded")
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "sendMessage() failed", e)
                 _inputState.update { it.copy(isLoading = false, error = e.message) }
