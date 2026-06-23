@@ -214,7 +214,7 @@ class ChatRepository(
             contentResolver.openInputStream(fileUri)?.use { inputStream ->
                 val bytes = inputStream.readBytes()
                 val detectedMime = contentResolver.getType(fileUri) ?: "application/octet-stream"
-                val fileName = fileUri.lastPathSegment ?: "file"
+                val fileName = resolveFileName(fileUri, contentResolver)
                 Triple(Base64.encodeToString(bytes, Base64.NO_WRAP), detectedMime, fileName)
             } ?: throw IllegalArgumentException("无法读取文件")
         }
@@ -233,6 +233,26 @@ class ChatRepository(
         } else {
             "@file:$name"
         }
+    }
+
+    /**
+     * 从 content URI 中解析原始文件名
+     */
+    private fun resolveFileName(uri: Uri, contentResolver: ContentResolver): String {
+        val cursor = contentResolver.query(uri, null, null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val idx = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (idx != -1) {
+                    val name = it.getString(idx)
+                    if (!name.isNullOrBlank()) return name
+                }
+            }
+        }
+        // fallback: 从 path 最后一段提取
+        return uri.lastPathSegment?.substringAfterLast("/")?.ifBlank { null }
+            ?: uri.lastPathSegment
+            ?: "file"
     }
 
     /**

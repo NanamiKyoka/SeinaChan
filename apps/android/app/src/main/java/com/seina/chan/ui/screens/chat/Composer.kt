@@ -158,6 +158,17 @@ fun Composer(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     items(selectedFiles, key = { it.toString() }) { uri ->
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        val fileName = remember(uri) {
+                            val cursor = context.contentResolver.query(uri, null, null, null, null)
+                            cursor?.use {
+                                if (it.moveToFirst()) {
+                                    val idx = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                                    if (idx != -1) it.getString(idx)
+                                    else null
+                                } else null
+                            } ?: uri.lastPathSegment?.substringAfterLast("/") ?: "文件"
+                        }
                         Row(
                             modifier = Modifier
                                 .padding(end = Spacing.sm)
@@ -173,7 +184,7 @@ fun Composer(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = uri.lastPathSegment ?: "文件",
+                                text = fileName,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
