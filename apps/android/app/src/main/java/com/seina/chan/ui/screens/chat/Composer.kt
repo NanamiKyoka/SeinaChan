@@ -70,9 +70,6 @@ fun Composer(
     onImagesSelected: (List<Uri>) -> Unit = {},
     onRemoveImage: (Uri) -> Unit = {},
     onImageClick: ((Uri) -> Unit)? = null,
-    selectedVideo: Uri? = null,
-    onVideoSelected: (Uri) -> Unit = {},
-    onRemoveVideo: () -> Unit = {},
     selectedFiles: List<Uri> = emptyList(),
     onFileSelected: (Uri) -> Unit = {},
     onRemoveFile: (Uri) -> Unit = {},
@@ -92,13 +89,6 @@ fun Composer(
         if (uris.isNotEmpty()) {
             onImagesSelected(uris)
         }
-    }
-
-    // 视频选择器启动器
-    val videoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { onVideoSelected(it) }
     }
 
     // 文件选择器启动器
@@ -158,93 +148,54 @@ fun Composer(
                     }
                 }
             }
-        }
-
-        // 选中的视频预览
-        if (selectedVideo != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = selectedVideo.toString().takeLast(30),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(
-                    onClick = onRemoveVideo,
-                    modifier = Modifier.size(20.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "移除视频",
-                        tint = Color.White,
-                        modifier = Modifier
-                            .size(16.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), CircleShape)
-                            .padding(2.dp)
-                    )
-                }
             }
-        }
-
-        // 选中的文件预览
-        if (selectedFiles.isNotEmpty()) {
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                items(selectedFiles, key = { it.toString() }) { uri ->
-                    Row(
-                        modifier = Modifier
-                            .padding(end = Spacing.sm)
-                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = uri.lastPathSegment ?: "文件",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        IconButton(
-                            onClick = { onRemoveFile(uri) },
-                            modifier = Modifier.size(20.dp)
+            // 选中的文件预览
+            if (selectedFiles.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(selectedFiles, key = { it.toString() }) { uri ->
+                        Row(
+                            modifier = Modifier
+                                .padding(end = Spacing.sm)
+                                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                                .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "移除文件",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
-                                    .padding(2.dp)
+                                imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
                             )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = uri.lastPathSegment ?: "文件",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            IconButton(
+                                onClick = { onRemoveFile(uri) },
+                                modifier = Modifier.size(20.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "移除文件",
+                                    tint = Color.White,
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                        .padding(2.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
         val filteredCommands = remember(value, slashCommands) {
             if (value.startsWith("/")) {
@@ -326,19 +277,6 @@ fun Composer(
                         onClick = {
                             menuExpanded = false
                             imagePickerLauncher.launch("image/*")
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("视频") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = null
-                            )
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            videoPickerLauncher.launch("video/*")
                         }
                     )
                     DropdownMenuItem(

@@ -177,7 +177,7 @@ class ChatViewModel @Inject constructor(
         }
         inputState.copy(
             messages = filtered,
-            canSend = (inputState.currentInput.isNotBlank() || inputState.selectedImages.isNotEmpty() || inputState.selectedVideo != null || inputState.selectedFiles.isNotEmpty()) && !inputState.isLoading
+            canSend = (inputState.currentInput.isNotBlank() || inputState.selectedImages.isNotEmpty() || inputState.selectedFiles.isNotEmpty()) && !inputState.isLoading
         )
     }.stateIn(
         scope = viewModelScope,
@@ -372,12 +372,11 @@ class ChatViewModel @Inject constructor(
     fun sendMessage() {
         val text = _inputState.value.currentInput.trim()
         val images = _inputState.value.selectedImages
-        val video = _inputState.value.selectedVideo
         val files = _inputState.value.selectedFiles
-        if (text.isEmpty() && images.isEmpty() && video == null && files.isEmpty()) return
+        if (text.isEmpty() && images.isEmpty() && files.isEmpty()) return
 
-        FileLogger.i("ChatViewModel", "sendMessage() dbSessionId=$currentDbSessionId, wsSessionId=$currentWsSessionId, textLength=${text.length}, images=${images.size}, video=$video, files=${files.size}")
-        _inputState.update { it.copy(isLoading = true, error = null, selectedImages = emptyList(), selectedVideo = null, selectedFiles = emptyList()) }
+        FileLogger.i("ChatViewModel", "sendMessage() dbSessionId=$currentDbSessionId, wsSessionId=$currentWsSessionId, textLength=${text.length}, images=${images.size}, files=${files.size}")
+        _inputState.update { it.copy(isLoading = true, error = null, selectedImages = emptyList(), selectedFiles = emptyList()) }
         viewModelScope.launch {
             try {
                 // 确保有可用的 wsSessionId；优先等待重连并 resume
@@ -389,50 +388,40 @@ class ChatViewModel @Inject constructor(
                         ensureSession(forceNew = true)
                     }
                 }
-                if (video != null) {
-                    try {
-                        chatRepository.sendVideo(video, context.contentResolver, currentWsSessionId, currentDbSessionId)
-                        FileLogger.i("ChatViewModel", "sendVideo() succeeded for uri=$video")
-                    } catch (e: Exception) {
-                        FileLogger.e("ChatViewModel", "sendVideo() failed for uri=$video", e)
-                    }
-                }
+
                 if (images.isNotEmpty()) {
                     sendImagesInternal(images)
                 }
+
+                // 先通过 file.attach 上传文件，拿到 @file: 引用
+                val fileRefs = mutableListOf<String>()
                 if (files.isNotEmpty()) {
-                    val fileContents = StringBuilder()
                     for (uri in files) {
                         try {
-                            context.contentResolver.openInputStream(uri)?.use { stream ->
-                                val bytes = stream.readBytes()
-                                val isBinary = bytes.contains(0.toByte())
-                                val name = uri.lastPathSegment ?: "未知文件"
-                                if (isBinary) {
-                                    fileContents.append("[File: $name] (binary file, content not readable)\n\n---\n\n")
-                                } else {
-                                    val charset = java.nio.charset.Charset.defaultCharset()
-                                    val content = String(bytes, charset)
-                                    fileContents.append("[File: $name]\n\n$content\n\n---\n\n")
-                                }
-                            }
+                            val ref = chatRepository.attachFile(uri, context.contentResolver, currentWsSessionId)
+                            fileRefs.add(ref)
+                            FileLogger.i("ChatViewModel", "attachFile() succeeded for uri=$uri, ref=$ref")
                         } catch (e: Exception) {
-                            val name = uri.lastPathSegment ?: "未知文件"
-                            fileContents.append("[File: $name] (binary file, content not readable)\n\n---\n\n")
+                            FileLogger.e("ChatViewModel", "attachFile() failed for uri=$uri", e)
                         }
                     }
-                    val combinedText = if (text.isNotEmpty()) {
-                        fileContents.toString() + text
-                    } else {
-                        fileContents.toString().trimEnd()
+                }
+
+                // 构造最终文本：@file: 引用 + 用户文字
+                val finalText = buildString {
+                    if (fileRefs.isNotEmpty()) {
+                        append(fileRefs.joinToString("\n"))
                     }
-                    if (combinedText.isNotBlank()) {
-                        chatRepository.sendMessage(combinedText, currentWsSessionId, currentDbSessionId, uiState.value.quotedMessage?.id)
+                    if (text.isNotEmpty()) {
+                        if (fileRefs.isNotEmpty()) append("\n")
+                        append(text)
                     }
-                } else if (text.isNotEmpty()) {
-                    chatRepository.sendMessage(text, currentWsSessionId, currentDbSessionId, uiState.value.quotedMessage?.id)
-                } else if (images.isNotEmpty() || video != null) {
-                    // 纯图片/视频场景：发送空 prompt 触发 assistant 回复
+                }
+
+                if (finalText.isNotBlank()) {
+                    chatRepository.sendMessage(finalText, currentWsSessionId, currentDbSessionId, uiState.value.quotedMessage?.id)
+                } else if (images.isNotEmpty()) {
+                    // 纯图片场景：发送空 prompt 触发 assistant 回复
                     chatRepository.submitPrompt(currentWsSessionId)
                 }
                 clearQuote()
@@ -460,13 +449,6 @@ class ChatViewModel @Inject constructor(
         _inputState.update { it.copy(selectedImages = it.selectedImages.filter { u -> u != uri }) }
     }
 
-    fun onVideoSelected(uri: Uri) {
-        _inputState.update { it.copy(selectedVideo = uri) }
-    }
-
-    fun removeSelectedVideo() {
-        _inputState.update { it.copy(selectedVideo = null) }
-    }
 
     fun onFileSelected(uri: Uri) {
         _inputState.update { it.copy(selectedFiles = it.selectedFiles + uri) }

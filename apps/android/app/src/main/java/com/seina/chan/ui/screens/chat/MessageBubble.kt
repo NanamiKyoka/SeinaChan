@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -22,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -142,7 +144,30 @@ fun MessageBubble(
                         // 文本内容（包含独立的长按覆盖层）
                         if (message.content.isNotBlank() && !isImageContent(message.content)) {
                             Box {
-                                if (isUser) {
+                                val fileRefs = parseFileRefs(message.content)
+                                if (fileRefs.isNotEmpty()) {
+                                    Column {
+                                        fileRefs.forEach { (fileName, ref) ->
+                                            FileCard(fileName = fileName, isUser = isUser)
+                                        }
+                                        val remaining = message.content.replace(Regex("@file:[^\\s]+"), "").trim()
+                                        if (remaining.isNotBlank()) {
+                                            if (isUser) {
+                                                Text(
+                                                    text = remaining,
+                                                    style = TextStyles.bodyMd,
+                                                    color = Color.White
+                                                )
+                                            } else {
+                                                MarkdownText(
+                                                    content = remaining,
+                                                    style = TextStyles.bodyMd,
+                                                    color = MaterialTheme.colorScheme.onBackground
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else if (isUser) {
                                     Text(
                                         text = message.content,
                                         style = TextStyles.bodyMd,
@@ -366,4 +391,58 @@ private fun isImageContent(content: String): Boolean {
     val cleanUrl = content.substringBefore("?").substringBefore("#")
     return cleanUrl.startsWith("http") &&
            listOf(".jpg", ".jpeg", ".png", ".gif", ".webp").any { cleanUrl.endsWith(it, ignoreCase = true) }
+}
+
+private data class FileRef(val fileName: String, val ref: String)
+
+/**
+ * 解析消息内容中的 @file: 引用
+ */
+private fun parseFileRefs(content: String): List<FileRef> {
+    val regex = Regex("@file:[^\\s]+")
+    return regex.findAll(content).map { match ->
+        val ref = match.value
+        val path = ref.removePrefix("@file:")
+        val fileName = path.substringAfterLast("/").ifEmpty { path }
+        FileRef(fileName, ref)
+    }.toList()
+}
+
+@Composable
+private fun FileCard(fileName: String, isUser: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 44.dp)
+            .background(
+                color = if (isUser) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                },
+                shape = AppShapes.sm
+            )
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+            contentDescription = null,
+            tint = if (isUser) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column {
+            Text(
+                text = fileName,
+                style = TextStyles.bodyMd,
+                color = if (isUser) Color.White else MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = "Gateway 文件",
+                style = TextStyles.caption,
+                color = if (isUser) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }

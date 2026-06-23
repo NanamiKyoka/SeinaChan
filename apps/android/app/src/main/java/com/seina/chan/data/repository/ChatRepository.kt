@@ -203,71 +203,36 @@ class ChatRepository(
     }
 
     /**
-     * 发送视频消息
-     * @param videoUri 视频 URI
-     * @param contentResolver 用于读取视频内容
-     * @param sessionId 会话 ID
+     * 通过 file.attach 上传文件到 Gateway
+     * @param fileUri 文件 URI
+     * @param contentResolver 用于读取文件内容
+     * @param wsSessionId WebSocket 会话 ID
+     * @return @file: 引用文本（如 "@file:.hermes/desktop-attachments/1.txt"）
      */
-    suspend fun sendVideo(videoUri: Uri, contentResolver: ContentResolver, wsSessionId: String, dbSessionId: String) {
-        currentSessionId = dbSessionId
-        _messages.value = _messages.value.map {
-            if (it.isStreaming && it.role == "assistant") {
-                finalizeToolCallsInMessage(
-                    it.copy(isStreaming = false, isReasoning = false)
-                )
-            } else it
-        }
-        persistMessages()
-
-        val fileSize = withContext(Dispatchers.IO) {
-            var size = 0L
-            contentResolver.query(videoUri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val idx = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
-                    if (idx != -1) size = cursor.getLong(idx)
-                }
-            }
-            size
-        }
-
-        if (fileSize > 10 * 1024 * 1024) {
-            FileLogger.w("ChatRepository", "Video too large (${fileSize} bytes), skipping upload")
-            val userMessage = ChatMessage(
-                id = java.util.UUID.randomUUID().toString(),
-                role = "user",
-                content = "[视频]",
-                isStreaming = false
-            )
-            _messages.value += userMessage
-            persistMessage(userMessage)
-            return
-        }
-
-        val (base64Data, mimeType) = withContext(Dispatchers.IO) {
-            contentResolver.openInputStream(videoUri)?.use { inputStream ->
+    suspend fun attachFile(fileUri: Uri, contentResolver: ContentResolver, wsSessionId: String): String {
+        val (base64Data, mimeType, name) = withContext(Dispatchers.IO) {
+            contentResolver.openInputStream(fileUri)?.use { inputStream ->
                 val bytes = inputStream.readBytes()
-                val detectedMime = contentResolver.getType(videoUri) ?: "video/mp4"
-                Pair(Base64.encodeToString(bytes, Base64.NO_WRAP), detectedMime)
-            } ?: throw IllegalArgumentException("无法读取视频")
+                val detectedMime = contentResolver.getType(fileUri) ?: "application/octet-stream"
+                val fileName = fileUri.lastPathSegment ?: "file"
+                Triple(Base64.encodeToString(bytes, Base64.NO_WRAP), detectedMime, fileName)
+            } ?: throw IllegalArgumentException("无法读取文件")
         }
 
-        val userMessage = ChatMessage(
-            id = java.util.UUID.randomUUID().toString(),
-            role = "user",
-            content = "",
-            isStreaming = false,
-            imageUrl = videoUri.toString()
-        )
-        _messages.value += userMessage
-        persistMessage(userMessage)
-
-        val dataUri = "data:$mimeType;base64,$base64Data"
+        val dataUrl = "data:$mimeType;base64,$base64Data"
         val params = buildJsonObject {
             put("session_id", wsSessionId)
-            put("data", dataUri)
-            put("name", "video.mp4")
+            put("data_url", dataUrl)
+            put("name", name)
         }
-        wsClient.request(HermesMethods.IMAGE_ATTACH_BYTES, params)
+        val result = wsClient.request(HermesMethods.FILE_ATTACH, params)
+        return if (result is JsonObject) {
+            result["ref_text"]?.jsonPrimitive?.content
+                ?: result["ref_path"]?.jsonPrimitive?.content?.let { "@file:$it" }
+                ?: "@file:$name"
+        } else {
+            "@file:$name"
+        }
     }
 
     /**

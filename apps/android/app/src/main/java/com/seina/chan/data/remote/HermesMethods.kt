@@ -11,6 +11,7 @@ object HermesMethods {
     const val SESSION_BRANCH = "session.branch"
     const val PROMPT_SUBMIT = "prompt.submit"
     const val IMAGE_ATTACH_BYTES = "image.attach_bytes"
+    const val FILE_ATTACH = "file.attach"
     const val SUDO_RESPOND = "sudo.respond"
     const val APPROVAL_RESPOND = "approval.respond"
     const val CLARIFY_RESPOND = "clarify.respond"
