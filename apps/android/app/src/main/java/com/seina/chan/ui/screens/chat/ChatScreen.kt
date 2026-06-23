@@ -62,6 +62,7 @@ import com.seina.chan.util.FileLogger
 import com.seina.chan.ui.components.dialogs.ClarifyDialog
 import com.seina.chan.ui.components.dialogs.SecretDialog
 import com.seina.chan.ui.components.dialogs.SudoDialog
+import com.seina.chan.ui.components.dialogs.ImagePreviewDialog
 import com.seina.chan.ui.screens.sessions.SessionListScreen
 import com.seina.chan.ui.theme.Spacing
 import com.seina.chan.ui.theme.TextStyles
@@ -239,32 +240,11 @@ fun ChatScreen(
         }
     )
 
-    // 图片全屏预览弹窗
-    previewImageUri?.let { uri ->
-        Dialog(
-            onDismissRequest = { previewImageUri = null },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true
-            )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.9f))
-                    .clickable { previewImageUri = null },
-                contentAlignment = Alignment.Center
-            ) {
-                AsyncImage(
-                    model = uri,
-                    contentDescription = "图片预览",
-                    modifier = Modifier.fillMaxWidth(0.95f),
-                    contentScale = ContentScale.Fit
-                )
-            }
-        }
-    }
+    // 图片全屏预览弹窗（支持缩放、拖拽、双击放大）
+    ImagePreviewDialog(
+        imageUri = previewImageUri,
+        onDismiss = { previewImageUri = null }
+    )
 
     val title = if (currentSessionId.isEmpty()) "口袋星奈" else currentSessionId.take(8)
 
