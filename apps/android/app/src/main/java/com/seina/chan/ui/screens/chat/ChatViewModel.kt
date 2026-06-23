@@ -393,6 +393,7 @@ class ChatViewModel @Inject constructor(
                 // 斜杠命令：通过 slash.exec 执行，不发送给 AI
                 val isSlashCommand = text.startsWith("/") && files.isEmpty()
                 if (isSlashCommand) {
+                    val commandName = text.substringBefore(" ").substringAfter("/")
                     try {
                         val params = buildJsonObject {
                             put("session_id", currentWsSessionId)
@@ -409,6 +410,22 @@ class ChatViewModel @Inject constructor(
                     } catch (e: Exception) {
                         FileLogger.e("ChatViewModel", "slash.exec failed for command=$text", e)
                     }
+
+                    // 特定命令的本地状态联动
+                    when (commandName) {
+                        "new" -> {
+                            ensureSession(forceNew = true)
+                            FileLogger.i("ChatViewModel", "/new: created new session")
+                        }
+                        "model" -> {
+                            val modelName = text.removePrefix("/model").trim()
+                            if (modelName.isNotBlank()) {
+                                settingsRepository.setSelectedModel(modelName)
+                                FileLogger.i("ChatViewModel", "/model: set to $modelName")
+                            }
+                        }
+                    }
+
                     clearQuote()
                     _editingMessage.value = null
                     _inputState.update { it.copy(currentInput = "", isLoading = false) }
@@ -527,6 +544,22 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 精选的斜杠命令列表（只保留对 App 对话场景有意义的命令）
+     */
+    private val curatedSlashCommands = setOf(
+        "new", "undo", "retry", "title", "branch", "compress",
+        "sessions", "resume", "help", "stop", "status",
+        "goal", "background", "bg", "queue", "q", "steer",
+        "agents", "tasks", "model", "reasoning", "fast",
+        "voice", "yolo", "footer",
+        "usage", "credits", "version", "whoami", "profile",
+        "insights", "commands",
+        "memory", "rollback", "suggestions", "blueprint", "bp",
+        "bundles", "reload-mcp", "reload-skills", "curator", "kanban",
+        "debug", "update", "restart"
+    )
+
     fun loadSlashCommands() {
         viewModelScope.launch {
             try {
@@ -536,13 +569,15 @@ class ChatViewModel @Inject constructor(
                 val commands = pairs.mapNotNull { element ->
                     val arr = element.jsonArray
                     if (arr.size >= 2) {
-                        val name = arr[0].jsonPrimitive.content
+                        val name = arr[0].jsonPrimitive.content.removePrefix("/")
                         val desc = arr[1].jsonPrimitive.content
-                        SlashCommand(name, desc)
+                        if (name in curatedSlashCommands) {
+                            SlashCommand("/$name", desc)
+                        } else null
                     } else null
                 }
                 _slashCommands.value = commands
-                FileLogger.i("ChatViewModel", "Loaded ${commands.size} slash commands")
+                FileLogger.i("ChatViewModel", "Loaded ${commands.size} curated slash commands")
             } catch (e: Exception) {
                 FileLogger.w("ChatViewModel", "Failed to load slash commands: ${e.message}")
             }
