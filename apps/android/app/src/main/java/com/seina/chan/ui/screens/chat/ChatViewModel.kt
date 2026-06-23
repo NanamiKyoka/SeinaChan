@@ -443,7 +443,7 @@ class ChatViewModel @Inject constructor(
                                 if (content != null) {
                                     fileBlocks.add("📎 $name\n\n$content")
                                 } else {
-                                    fileBlocks.add("📎 $name（二进制文件）")
+                                    fileBlocks.add("📎 $name\n\n（二进制文件，存储于 $ref）")
                                 }
                                 FileLogger.i("ChatViewModel", "attachFile() succeeded for uri=$uri, ref=$ref, name=$name")
                             } catch (e: Exception) {

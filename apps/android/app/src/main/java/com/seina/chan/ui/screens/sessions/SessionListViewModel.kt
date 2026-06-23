@@ -249,8 +249,7 @@ class SessionListViewModel @Inject constructor(
         viewModelScope.launch {
             FileLogger.i("SessionListViewModel", "undoSession() id=$sessionId")
             try {
-                sessionRepository.resumeSession(sessionId)
-                sessionRepository.undoSession()
+                sessionRepository.undoSession(sessionId)
                 FileLogger.i("SessionListViewModel", "undoSession() succeeded")
                 loadSessions(refresh = true)
             } catch (e: Exception) {
@@ -263,8 +262,7 @@ class SessionListViewModel @Inject constructor(
         viewModelScope.launch {
             FileLogger.i("SessionListViewModel", "compressSession() id=$sessionId")
             try {
-                sessionRepository.resumeSession(sessionId)
-                sessionRepository.compressSession()
+                sessionRepository.compressSession(sessionId)
                 FileLogger.i("SessionListViewModel", "compressSession() succeeded")
                 loadSessions(refresh = true)
             } catch (e: Exception) {

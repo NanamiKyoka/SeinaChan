@@ -359,15 +359,19 @@ class SessionRepository(
         FileLogger.i("SessionRepository", "renameSession() succeeded")
     }
 
-    suspend fun undoSession() {
-        FileLogger.i("SessionRepository", "undoSession()")
-        wsClient.request(HermesMethods.SESSION_UNDO)
+    suspend fun undoSession(sessionId: String) {
+        FileLogger.i("SessionRepository", "undoSession() id=$sessionId")
+        wsClient.request(HermesMethods.SESSION_UNDO, buildJsonObject {
+            put("session_id", sessionId)
+        })
         FileLogger.i("SessionRepository", "undoSession() succeeded")
     }
 
-    suspend fun compressSession() {
-        FileLogger.i("SessionRepository", "compressSession()")
-        wsClient.request(HermesMethods.SESSION_COMPRESS)
+    suspend fun compressSession(sessionId: String) {
+        FileLogger.i("SessionRepository", "compressSession() id=$sessionId")
+        wsClient.request(HermesMethods.SESSION_COMPRESS, buildJsonObject {
+            put("session_id", sessionId)
+        })
         FileLogger.i("SessionRepository", "compressSession() succeeded")
     }
 

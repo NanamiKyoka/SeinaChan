@@ -116,6 +116,12 @@ fun MessageBubble(
                     )
                 }
             }
+            // 判断气泡内是否有实际内容
+            val hasImage = message.imageUrl != null || isImageContent(message.content)
+            val bubbleDisplayText = if (fileSections.isNotEmpty()) textBeforeFile else message.content
+            val hasText = bubbleDisplayText.isNotBlank() && !isImageContent(message.content)
+            val isTypingOnly = message.isStreaming && message.content.isEmpty() && message.imageUrl == null
+
             // 消息气泡
             var showMenu by remember { mutableStateOf(false) }
             var pressOffset by remember { mutableStateOf(Offset.Zero) }
@@ -132,10 +138,10 @@ fun MessageBubble(
             ) {
                 if (message.isStreaming && message.content.isEmpty() && message.imageUrl == null) {
                     TypingIndicator()
-                } else {
+                } else if (hasImage || hasText) {
                     Column {
-                        // 图片（独立点击区域，不受长按覆盖层影响）
-                        if (message.imageUrl != null || isImageContent(message.content)) {
+                        // 图片
+                        if (hasImage) {
                             val imageModel = message.imageUrl ?: message.content
                             AsyncImage(
                                 model = imageModel,
@@ -151,19 +157,18 @@ fun MessageBubble(
                                 contentScale = ContentScale.Crop
                             )
                         }
-                        // 文本内容：文件内容已在气泡外展示，这里只显示剩余文本
-                        val displayText = if (fileSections.isNotEmpty()) textBeforeFile else message.content
-                        if (displayText.isNotBlank() && !isImageContent(message.content)) {
+                        // 文本内容
+                        if (hasText) {
                             Box {
                                 if (isUser) {
                                     Text(
-                                        text = displayText,
+                                        text = bubbleDisplayText,
                                         style = TextStyles.bodyMd,
                                         color = Color.White
                                     )
                                 } else {
                                     MarkdownText(
-                                        content = displayText,
+                                        content = bubbleDisplayText,
                                         style = TextStyles.bodyMd,
                                         color = MaterialTheme.colorScheme.onBackground
                                     )
@@ -189,14 +194,14 @@ fun MessageBubble(
                                     DropdownMenuItem(
                                         text = { Text("复制") },
                                         onClick = {
-                                            clipboardManager.setText(AnnotatedString(displayText))
+                                            clipboardManager.setText(AnnotatedString(bubbleDisplayText))
                                             showMenu = false
                                         }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("全选") },
                                         onClick = {
-                                            clipboardManager.setText(AnnotatedString(displayText))
+                                            clipboardManager.setText(AnnotatedString(bubbleDisplayText))
                                             showMenu = false
                                         }
                                     )
@@ -253,12 +258,12 @@ fun MessageBubble(
                                                 SelectionContainer {
                                                     if (isUser) {
                                                         Text(
-                                                            text = displayText,
+                                                            text = bubbleDisplayText,
                                                             style = TextStyles.bodyMd
                                                         )
                                                     } else {
                                                         MarkdownText(
-                                                            content = displayText,
+                                                            content = bubbleDisplayText,
                                                             style = TextStyles.bodyMd,
                                                             color = MaterialTheme.colorScheme.onBackground
                                                         )
@@ -276,7 +281,7 @@ fun MessageBubble(
                             }
                         }
                     }
-            }
+                }
             }
 
             // 时间戳
@@ -415,7 +420,7 @@ private fun FileContentPanel(fileName: String, content: String, isUser: Boolean)
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                color = if (isUser) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceVariant,
                 shape = AppShapes.md
             )
     ) {
