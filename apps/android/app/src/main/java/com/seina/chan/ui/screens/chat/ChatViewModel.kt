@@ -88,7 +88,17 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             var previousState: ConnectionState = ConnectionState.Idle
             wsClient.state.collect { state ->
-                if ((previousState is ConnectionState.Closed || previousState is ConnectionState.Error)
+                // 断线时清除过期 wsSessionId，防止 ensureWsSessionReady 因旧值误判为有效
+                if (state is ConnectionState.Closed || state is ConnectionState.Error) {
+                    if (currentWsSessionId.isNotEmpty()) {
+                        FileLogger.i("ChatViewModel", "WebSocket disconnected, clearing stale wsSessionId")
+                        currentWsSessionId = ""
+                    }
+                }
+                // 任意非 Open 状态 → Open 时触发自动恢复（包括 Connecting → Open）
+                if ((previousState is ConnectionState.Closed
+                        || previousState is ConnectionState.Error
+                        || previousState is ConnectionState.Connecting)
                     && state is ConnectionState.Open
                     && currentDbSessionId.isNotEmpty()
                 ) {
@@ -375,8 +385,8 @@ class ChatViewModel @Inject constructor(
                     if (currentDbSessionId.isEmpty()) {
                         ensureSession()
                     } else {
-                        _inputState.update { it.copy(isLoading = false, error = "会话恢复失败，请稍后重试") }
-                        return@launch
+                        FileLogger.w("ChatViewModel", "sendMessage: session resume failed, creating new session as fallback")
+                        ensureSession(forceNew = true)
                     }
                 }
                 if (video != null) {
@@ -491,8 +501,8 @@ class ChatViewModel @Inject constructor(
                     if (currentDbSessionId.isEmpty()) {
                         ensureSession()
                     } else {
-                        _inputState.update { it.copy(isLoading = false, error = "会话恢复失败，请稍后重试") }
-                        return@launch
+                        FileLogger.w("ChatViewModel", "sendImage: session resume failed, creating new session as fallback")
+                        ensureSession(forceNew = true)
                     }
                 }
                 chatRepository.sendImage(uri, context.contentResolver, currentWsSessionId, currentDbSessionId)
