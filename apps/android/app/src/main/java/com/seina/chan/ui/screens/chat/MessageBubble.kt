@@ -121,25 +121,27 @@ fun MessageBubble(
                 if (message.isStreaming && message.content.isEmpty() && message.imageUrl == null) {
                     TypingIndicator()
                 } else {
-                    val contentColumn: @Composable () -> Unit = {
-                        Column {
-                            if (message.imageUrl != null || isImageContent(message.content)) {
-                                val imageModel = message.imageUrl ?: message.content
-                                AsyncImage(
-                                    model = imageModel,
-                                    contentDescription = "图片",
-                                    modifier = Modifier
-                                        .sizeIn(maxWidth = 240.dp, maxHeight = 240.dp)
-                                        .clip(AppShapes.md)
-                                        .then(
-                                            if (onImageClick != null) {
-                                                Modifier.clickable { onImageClick(imageModel) }
-                                            } else Modifier
-                                        ),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
-                            if (message.content.isNotBlank() && !isImageContent(message.content)) {
+                    Column {
+                        // 图片（独立点击区域，不受长按覆盖层影响）
+                        if (message.imageUrl != null || isImageContent(message.content)) {
+                            val imageModel = message.imageUrl ?: message.content
+                            AsyncImage(
+                                model = imageModel,
+                                contentDescription = "图片",
+                                modifier = Modifier
+                                    .sizeIn(maxWidth = 240.dp, maxHeight = 240.dp)
+                                    .clip(AppShapes.md)
+                                    .then(
+                                        if (onImageClick != null) {
+                                            Modifier.clickable { onImageClick(imageModel) }
+                                        } else Modifier
+                                    ),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        // 文本内容（包含独立的长按覆盖层）
+                        if (message.content.isNotBlank() && !isImageContent(message.content)) {
+                            Box {
                                 if (isUser) {
                                     Text(
                                         text = message.content,
@@ -153,116 +155,115 @@ fun MessageBubble(
                                         color = MaterialTheme.colorScheme.onBackground
                                     )
                                 }
-                            }
-                        }
-                    }
-                    contentColumn()
-                }
-                // 透明覆盖层承接长按手势，避免 ClickableText 拦截事件导致 onLongPress 不触发
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .pointerInput(Unit) {
-                            detectTapGestures(onLongPress = { offset ->
-                                pressOffset = offset
-                                showMenu = true
-                            })
-                        }
-                )
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false },
-                    offset = with(density) {
-                        DpOffset(pressOffset.x.toDp(), pressOffset.y.toDp())
-                    }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("复制") },
-                        onClick = {
-                            clipboardManager.setText(AnnotatedString(message.content))
-                            showMenu = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("全选") },
-                        onClick = {
-                            clipboardManager.setText(AnnotatedString(message.content))
-                            showMenu = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("选择") },
-                        onClick = {
-                            showMenu = false
-                            showSelectionDialog = true
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("引用回复") },
-                        enabled = onQuote != null,
-                        onClick = {
-                            onQuote?.invoke(message)
-                            showMenu = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("重新发送") },
-                        enabled = isUser && onResend != null,
-                        onClick = {
-                            onResend?.invoke(message.content)
-                            showMenu = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("编辑") },
-                        enabled = isUser && onEdit != null,
-                        onClick = {
-                            onEdit?.invoke(message)
-                            showMenu = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("从此处分支新会话") },
-                        enabled = onBranch != null,
-                        onClick = {
-                            onBranch?.invoke(message)
-                            showMenu = false
-                        }
-                    )
-                }
-
-                if (showSelectionDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showSelectionDialog = false },
-                        title = { Text("选择文字") },
-                        text = {
-                            Box(
-                                modifier = Modifier
-                                    .verticalScroll(rememberScrollState())
-                            ) {
-                                SelectionContainer {
-                                    if (isUser) {
-                                        Text(
-                                            text = message.content,
-                                            style = TextStyles.bodyMd
-                                        )
-                                    } else {
-                                        MarkdownText(
-                                            content = message.content,
-                                            style = TextStyles.bodyMd,
-                                            color = MaterialTheme.colorScheme.onBackground
-                                        )
+                                // 透明覆盖层承接长按手势
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .pointerInput(Unit) {
+                                            detectTapGestures(onLongPress = { offset ->
+                                                pressOffset = offset
+                                                showMenu = true
+                                            })
+                                        }
+                                )
+                                DropdownMenu(
+                                    expanded = showMenu,
+                                    onDismissRequest = { showMenu = false },
+                                    offset = with(density) {
+                                        DpOffset(pressOffset.x.toDp(), pressOffset.y.toDp())
                                     }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("复制") },
+                                        onClick = {
+                                            clipboardManager.setText(AnnotatedString(message.content))
+                                            showMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("全选") },
+                                        onClick = {
+                                            clipboardManager.setText(AnnotatedString(message.content))
+                                            showMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("选择") },
+                                        onClick = {
+                                            showMenu = false
+                                            showSelectionDialog = true
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("引用回复") },
+                                        enabled = onQuote != null,
+                                        onClick = {
+                                            onQuote?.invoke(message)
+                                            showMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("重新发送") },
+                                        enabled = isUser && onResend != null,
+                                        onClick = {
+                                            onResend?.invoke(message.content)
+                                            showMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("编辑") },
+                                        enabled = isUser && onEdit != null,
+                                        onClick = {
+                                            onEdit?.invoke(message)
+                                            showMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("从此处分支新会话") },
+                                        enabled = onBranch != null,
+                                        onClick = {
+                                            onBranch?.invoke(message)
+                                            showMenu = false
+                                        }
+                                    )
+                                }
+
+                                if (showSelectionDialog) {
+                                    AlertDialog(
+                                        onDismissRequest = { showSelectionDialog = false },
+                                        title = { Text("选择文字") },
+                                        text = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .verticalScroll(rememberScrollState())
+                                            ) {
+                                                SelectionContainer {
+                                                    if (isUser) {
+                                                        Text(
+                                                            text = message.content,
+                                                            style = TextStyles.bodyMd
+                                                        )
+                                                    } else {
+                                                        MarkdownText(
+                                                            content = message.content,
+                                                            style = TextStyles.bodyMd,
+                                                            color = MaterialTheme.colorScheme.onBackground
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        confirmButton = {
+                                            TextButton(onClick = { showSelectionDialog = false }) {
+                                                Text("关闭")
+                                            }
+                                        }
+                                    )
                                 }
                             }
-                        },
-                        confirmButton = {
-                            TextButton(onClick = { showSelectionDialog = false }) {
-                                Text("关闭")
-                            }
                         }
-                    )
-                }
+                    }
+            }
             }
 
             // 时间戳
