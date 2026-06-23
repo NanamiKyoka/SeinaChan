@@ -37,13 +37,13 @@ jobs:
           BODY="## ${CURRENT_TAG}\n\n"
 
           # 使用 %s 获取提交标题（subject only），避免 body 内容污染分类
-          FEAT=$(git log ${RANGE} --format="%s" | grep -E '^feat\(' | sed 's/^/- /')
-          FIX=$(git log ${RANGE} --format="%s" | grep -E '^fix\(' | sed 's/^/- /')
-          REFACTOR=$(git log ${RANGE} --format="%s" | grep -E '^(refactor|ui)\(' | sed 's/^/- /')
-          DOCS=$(git log ${RANGE} --format="%s" | grep -E '^docs\(' | sed 's/^/- /')
-          TEST=$(git log ${RANGE} --format="%s" | grep -E '^test\(' | sed 's/^/- /')
-          CHORE=$(git log ${RANGE} --format="%s" | grep -E '^chore\(' | sed 's/^/- /')
-          OTHER=$(git log ${RANGE} --format="%s" | grep -v '^\s*$' | grep -v -E '^(feat|fix|refactor|ui|docs|test|chore)\(' | sed 's/^/- /')
+          FEAT=$(git log ${RANGE} --format="%s" | grep -E '^feat[(:]' | sed 's/^/- /')
+          FIX=$(git log ${RANGE} --format="%s" | grep -E '^fix[(:]' | sed 's/^/- /')
+          REFACTOR=$(git log ${RANGE} --format="%s" | grep -E '^(refactor|ui)[(:]' | sed 's/^/- /')
+          DOCS=$(git log ${RANGE} --format="%s" | grep -E '^docs[(:]' | sed 's/^/- /')
+          TEST=$(git log ${RANGE} --format="%s" | grep -E '^test[(:]' | sed 's/^/- /')
+          CHORE=$(git log ${RANGE} --format="%s" | grep -E '^chore[(:]' | sed 's/^/- /')
+          OTHER=$(git log ${RANGE} --format="%s" | grep -v '^\s*$' | grep -v -E '^(feat|fix|refactor|ui|docs|test|chore)[(:]' | sed 's/^/- /')
 
           if [ -n "$FEAT" ]; then BODY="${BODY}### ✨ 新功能\n${FEAT}\n\n"; fi
           if [ -n "$FIX" ]; then BODY="${BODY}### 🐛 修复\n${FIX}\n\n"; fi

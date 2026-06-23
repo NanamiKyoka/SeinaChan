@@ -5,6 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 
@@ -188,10 +192,19 @@ fun MessageBubble(
                                     modifier = Modifier
                                         .matchParentSize()
                                         .pointerInput(Unit) {
-                                            detectTapGestures(onLongPress = { offset ->
-                                                pressOffset = offset
-                                                showMenu = true
-                                            })
+                                            val longPressTimeout = viewConfiguration.longPressTimeoutMillis
+                                            awaitEachGesture {
+                                                val down = awaitFirstDown(requireUnconsumed = false)
+                                                val result = withTimeoutOrNull(longPressTimeout) {
+                                                    waitForUpOrCancellation()
+                                                }
+                                                if (result == null) {
+                                                    // 长按触发：显示上下文菜单
+                                                    pressOffset = down.position
+                                                    showMenu = true
+                                                }
+                                                // 短按：不消费事件，让子元素（如文件卡片）处理点击
+                                            }
                                         }
                                 )
                                 DropdownMenu(
