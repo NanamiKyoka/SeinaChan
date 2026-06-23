@@ -105,7 +105,17 @@ fun MessageBubble(
                     }
                 }
             }
-
+            // 用户文件面板（在气泡外可折叠显示，类似 ReasoningPanel）
+            val (fileSections, textBeforeFile) = parseFileSections(message.content)
+            if (fileSections.isNotEmpty()) {
+                fileSections.forEach { section ->
+                    FileContentPanel(
+                        fileName = section.fileName,
+                        content = section.content,
+                        isUser = isUser
+                    )
+                }
+            }
             // 消息气泡
             var showMenu by remember { mutableStateOf(false) }
             var pressOffset by remember { mutableStateOf(Offset.Zero) }
@@ -141,44 +151,19 @@ fun MessageBubble(
                                 contentScale = ContentScale.Crop
                             )
                         }
-                        // 文本内容（包含独立的长按覆盖层）
-                        if (message.content.isNotBlank() && !isImageContent(message.content)) {
+                        // 文本内容：文件内容已在气泡外展示，这里只显示剩余文本
+                        val displayText = if (fileSections.isNotEmpty()) textBeforeFile else message.content
+                        if (displayText.isNotBlank() && !isImageContent(message.content)) {
                             Box {
-                                val (fileSections, textBefore) = parseFileSections(message.content)
-                                if (fileSections.isNotEmpty()) {
-                                    Column {
-                                        fileSections.forEach { section ->
-                                            ExpandableFileCard(
-                                                fileName = section.fileName,
-                                                content = section.content,
-                                                isUser = isUser
-                                            )
-                                        }
-                                        if (textBefore.isNotBlank()) {
-                                            if (isUser) {
-                                                Text(
-                                                    text = textBefore,
-                                                    style = TextStyles.bodyMd,
-                                                    color = Color.White
-                                                )
-                                            } else {
-                                                MarkdownText(
-                                                    content = textBefore,
-                                                    style = TextStyles.bodyMd,
-                                                    color = MaterialTheme.colorScheme.onBackground
-                                                )
-                                            }
-                                        }
-                                    }
-                                } else if (isUser) {
+                                if (isUser) {
                                     Text(
-                                        text = message.content,
+                                        text = displayText,
                                         style = TextStyles.bodyMd,
                                         color = Color.White
                                     )
                                 } else {
                                     MarkdownText(
-                                        content = message.content,
+                                        content = displayText,
                                         style = TextStyles.bodyMd,
                                         color = MaterialTheme.colorScheme.onBackground
                                     )
@@ -204,14 +189,14 @@ fun MessageBubble(
                                     DropdownMenuItem(
                                         text = { Text("复制") },
                                         onClick = {
-                                            clipboardManager.setText(AnnotatedString(message.content))
+                                            clipboardManager.setText(AnnotatedString(displayText))
                                             showMenu = false
                                         }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("全选") },
                                         onClick = {
-                                            clipboardManager.setText(AnnotatedString(message.content))
+                                            clipboardManager.setText(AnnotatedString(displayText))
                                             showMenu = false
                                         }
                                     )
@@ -268,12 +253,12 @@ fun MessageBubble(
                                                 SelectionContainer {
                                                     if (isUser) {
                                                         Text(
-                                                            text = message.content,
+                                                            text = displayText,
                                                             style = TextStyles.bodyMd
                                                         )
                                                     } else {
                                                         MarkdownText(
-                                                            content = message.content,
+                                                            content = displayText,
                                                             style = TextStyles.bodyMd,
                                                             color = MaterialTheme.colorScheme.onBackground
                                                         )
@@ -423,61 +408,55 @@ private fun parseFileSections(text: String): Pair<List<FileSection>, String> {
 }
 
 @Composable
-private fun ExpandableFileCard(fileName: String, content: String, isUser: Boolean) {
+private fun FileContentPanel(fileName: String, content: String, isUser: Boolean) {
     var expanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(AppShapes.sm)
             .background(
-                color = if (isUser) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                }
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = AppShapes.md
             )
     ) {
-        // 可点击的头部行：图标 + 文件名 + 展开箭头
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
                 contentDescription = null,
-                tint = if (isUser) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = fileName,
                 style = TextStyles.bodyMd,
-                color = if (isUser) Color.White else MaterialTheme.colorScheme.onBackground,
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.weight(1f)
             )
             Icon(
                 imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                 contentDescription = if (expanded) "收起" else "展开",
-                tint = if (isUser) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
         }
 
-        // 可展开的文件内容
         AnimatedVisibility(visible = expanded) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
+                    .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
             ) {
                 Text(
                     text = content,
                     style = TextStyles.bodySm,
-                    color = if (isUser) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onBackground
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
         }
