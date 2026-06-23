@@ -393,27 +393,33 @@ class ChatViewModel @Inject constructor(
                     sendImagesInternal(images)
                 }
 
-                // 先通过 file.attach 上传文件，拿到 @file: 引用
-                val fileRefs = mutableListOf<String>()
+                // 文件：先上传到 Gateway，再构建包含文件名和内容的文本
+                val fileBlocks = mutableListOf<String>()
                 if (files.isNotEmpty()) {
                     for (uri in files) {
                         try {
-                            val ref = chatRepository.attachFile(uri, context.contentResolver, currentWsSessionId)
-                            fileRefs.add(ref)
-                            FileLogger.i("ChatViewModel", "attachFile() succeeded for uri=$uri, ref=$ref")
+                            val (ref, name, content) = chatRepository.attachFileWithContent(uri, context.contentResolver, currentWsSessionId)
+                            if (content != null) {
+                                fileBlocks.add("📎 $name\n\n$content")
+                            } else {
+                                fileBlocks.add("📎 $name（二进制文件）")
+                            }
+                            FileLogger.i("ChatViewModel", "attachFile() succeeded for uri=$uri, ref=$ref, name=$name")
                         } catch (e: Exception) {
                             FileLogger.e("ChatViewModel", "attachFile() failed for uri=$uri", e)
                         }
                     }
                 }
 
-                // 构造最终文本：@file: 引用 + 用户文字
+                // 构造最终文本：文件块 + 用户文字 + @file: 引用
                 val finalText = buildString {
-                    if (fileRefs.isNotEmpty()) {
-                        append(fileRefs.joinToString("\n"))
+                    if (fileBlocks.isNotEmpty()) {
+                        append(fileBlocks.joinToString("\n\n"))
+                    }
+                    if (fileBlocks.isNotEmpty() && text.isNotEmpty()) {
+                        append("\n\n")
                     }
                     if (text.isNotEmpty()) {
-                        if (fileRefs.isNotEmpty()) append("\n")
                         append(text)
                     }
                 }

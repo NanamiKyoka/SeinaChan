@@ -256,6 +256,43 @@ class ChatRepository(
     }
 
     /**
+     * 上传文件到 Gateway 并返回引用、文件名、文本内容（可用于可折叠卡片渲染）
+     * @return Triple<(ref, fileName, contentOrNull)>
+     */
+    suspend fun attachFileWithContent(fileUri: Uri, contentResolver: ContentResolver, wsSessionId: String): Triple<String, String, String?> {
+        val data = withContext(Dispatchers.IO) {
+            contentResolver.openInputStream(fileUri)?.use { inputStream ->
+                val bytes = inputStream.readBytes()
+                val detectedMime = contentResolver.getType(fileUri) ?: "application/octet-stream"
+                val fileName = resolveFileName(fileUri, contentResolver)
+                val isBinary = bytes.contains(0.toByte())
+                val textContent = if (!isBinary && bytes.isNotEmpty()) {
+                    String(bytes, java.nio.charset.Charset.defaultCharset())
+                } else null
+                Triple(Base64.encodeToString(bytes, Base64.NO_WRAP), detectedMime, fileName) to textContent
+            } ?: throw IllegalArgumentException("无法读取文件")
+        }
+        val (uploadData, textContent) = data
+        val (base64Data, mimeType, name) = uploadData
+
+        val dataUrl = "data:$mimeType;base64,$base64Data"
+        val params = buildJsonObject {
+            put("session_id", wsSessionId)
+            put("data_url", dataUrl)
+            put("name", name)
+        }
+        val result = wsClient.request(HermesMethods.FILE_ATTACH, params)
+        val ref = if (result is JsonObject) {
+            result["ref_text"]?.jsonPrimitive?.content
+                ?: result["ref_path"]?.jsonPrimitive?.content?.let { "@file:$it" }
+                ?: "@file:$name"
+        } else {
+            "@file:$name"
+        }
+        return Triple(ref, name, textContent)
+    }
+
+    /**
      * 提交空 prompt 以触发 assistant 回复（用于纯图片发送场景）
      */
     suspend fun submitPrompt(sessionId: String) {

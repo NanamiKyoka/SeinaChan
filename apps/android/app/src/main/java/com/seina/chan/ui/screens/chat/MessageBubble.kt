@@ -144,23 +144,26 @@ fun MessageBubble(
                         // 文本内容（包含独立的长按覆盖层）
                         if (message.content.isNotBlank() && !isImageContent(message.content)) {
                             Box {
-                                val fileRefs = parseFileRefs(message.content)
-                                if (fileRefs.isNotEmpty()) {
+                                val (fileSections, textBefore) = parseFileSections(message.content)
+                                if (fileSections.isNotEmpty()) {
                                     Column {
-                                        fileRefs.forEach { (fileName, ref) ->
-                                            FileCard(fileName = fileName, isUser = isUser)
+                                        fileSections.forEach { section ->
+                                            ExpandableFileCard(
+                                                fileName = section.fileName,
+                                                content = section.content,
+                                                isUser = isUser
+                                            )
                                         }
-                                        val remaining = message.content.replace(Regex("@file:[^\\s]+"), "").trim()
-                                        if (remaining.isNotBlank()) {
+                                        if (textBefore.isNotBlank()) {
                                             if (isUser) {
                                                 Text(
-                                                    text = remaining,
+                                                    text = textBefore,
                                                     style = TextStyles.bodyMd,
                                                     color = Color.White
                                                 )
                                             } else {
                                                 MarkdownText(
-                                                    content = remaining,
+                                                    content = textBefore,
                                                     style = TextStyles.bodyMd,
                                                     color = MaterialTheme.colorScheme.onBackground
                                                 )
@@ -393,56 +396,90 @@ private fun isImageContent(content: String): Boolean {
            listOf(".jpg", ".jpeg", ".png", ".gif", ".webp").any { cleanUrl.endsWith(it, ignoreCase = true) }
 }
 
-private data class FileRef(val fileName: String, val ref: String)
+private data class FileSection(val fileName: String, val content: String)
 
 /**
- * 解析消息内容中的 @file: 引用
+ * 解析消息内容中的 📎 文件块
+ * @return (文件段落列表, 首个 📎 之前的文本)
  */
-private fun parseFileRefs(content: String): List<FileRef> {
-    val regex = Regex("@file:[^\\s]+")
-    return regex.findAll(content).map { match ->
-        val ref = match.value
-        val path = ref.removePrefix("@file:")
-        val fileName = path.substringAfterLast("/").ifEmpty { path }
-        FileRef(fileName, ref)
-    }.toList()
+private fun parseFileSections(text: String): Pair<List<FileSection>, String> {
+    val sections = mutableListOf<FileSection>()
+    val regex = Regex("""📎 ([^\n]+)\n\n""")
+    val matches = regex.findAll(text).toList()
+    if (matches.isEmpty()) return emptyList<FileSection>() to text
+
+    val beforeFirst = text.substring(0, matches[0].range.first).trim()
+
+    for (i in matches.indices) {
+        val match = matches[i]
+        val fileName = match.groupValues[1].trim()
+        val contentStart = match.range.last + 1
+        val contentEnd = if (i + 1 < matches.size) matches[i + 1].range.first else text.length
+        val fileContent = text.substring(contentStart, contentEnd).trim()
+        sections.add(FileSection(fileName, fileContent))
+    }
+
+    return sections to beforeFirst
 }
 
 @Composable
-private fun FileCard(fileName: String, isUser: Boolean) {
-    Row(
+private fun ExpandableFileCard(fileName: String, content: String, isUser: Boolean) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 44.dp)
+            .clip(AppShapes.sm)
             .background(
                 color = if (isUser) {
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                 } else {
                     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                },
-                shape = AppShapes.sm
+                }
             )
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
-            contentDescription = null,
-            tint = if (isUser) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column {
+        // 可点击的头部行：图标 + 文件名 + 展开箭头
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+                contentDescription = null,
+                tint = if (isUser) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = fileName,
                 style = TextStyles.bodyMd,
-                color = if (isUser) Color.White else MaterialTheme.colorScheme.onBackground
+                color = if (isUser) Color.White else MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.weight(1f)
             )
-            Text(
-                text = "Gateway 文件",
-                style = TextStyles.caption,
-                color = if (isUser) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
+            Icon(
+                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = if (expanded) "收起" else "展开",
+                tint = if (isUser) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
             )
+        }
+
+        // 可展开的文件内容
+        AnimatedVisibility(visible = expanded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
+            ) {
+                Text(
+                    text = content,
+                    style = TextStyles.bodySm,
+                    color = if (isUser) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onBackground
+                )
+            }
         }
     }
 }
