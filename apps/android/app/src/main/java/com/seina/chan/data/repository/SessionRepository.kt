@@ -48,7 +48,7 @@ class SessionRepository(
         return sessionDao.getAllSessions().map { it.toSession() }
     }
 
-    suspend fun fetchSessions(limit: Int = 20, offset: Int = 0): SessionsPageResult {
+    suspend fun fetchSessions(limit: Int = 20, offset: Int = 0, knownIds: Set<String> = emptySet()): SessionsPageResult {
         val result = wsClient.request(HermesMethods.SESSION_LIST, buildJsonObject {
             put("limit", limit)
             put("offset", offset)
@@ -69,7 +69,16 @@ class SessionRepository(
             )
         } ?: emptyList()
         val total = result.jsonObject["total"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
-        val hasMore = if (total > 0) offset + limit < total else sessions.size >= limit
+
+        // 检测服务端是否忽略了 offset：如果返回的会话 ID 全部已知，说明无新数据
+        val allKnown = knownIds.isNotEmpty() && sessions.isNotEmpty() && sessions.all { it.id in knownIds }
+        val hasMore = if (allKnown) {
+            false
+        } else if (total > 0) {
+            offset + limit < total
+        } else {
+            sessions.size >= limit
+        }
 
         val entities = sessions.map { it.toEntity() }
         if (offset == 0) {
@@ -79,7 +88,7 @@ class SessionRepository(
         }
 
         return SessionsPageResult(
-            sessions = sessions,
+            sessions = if (allKnown) emptyList() else sessions,
             total = total,
             hasMore = hasMore
         )

@@ -92,7 +92,6 @@ class SessionListViewModel @Inject constructor(
                 .debounce(300)
                 .collect { query ->
                     if (query.isNotBlank()) {
-                        // 搜索时加载所有会话确保本地过滤覆盖全部
                         loadAllSessions()
                     }
                 }
@@ -155,23 +154,19 @@ class SessionListViewModel @Inject constructor(
             }
         }
     }
-    private var loadingAll = false
+
     private fun loadAllSessions() {
-        if (loadingAll) return
-        loadingAll = true
         viewModelScope.launch {
-            val seenIds = mutableSetOf<String>()
+            val knownIds = mutableSetOf<String>()
             var currentOffset = 0
             var more = true
             while (more) {
                 try {
-                    val result = sessionRepository.fetchSessions(limit = limit, offset = currentOffset)
-                    // 去重：服务端可能忽略 offset 重复返回首页，检测到重复即停止
-                    val newSessions = result.sessions.filter { seenIds.add(it.id) }
-                    if (newSessions.isEmpty()) break
-                    // 追加时去重（保留首次出现的顺序）
-                    val deduped = (_sessions.value + newSessions).distinctBy { it.id }
-                    _sessions.value = deduped
+                    val result = sessionRepository.fetchSessions(limit = limit, offset = currentOffset, knownIds = knownIds)
+                    val newSessions = result.sessions.filter { knownIds.add(it.id) }
+                    if (newSessions.isNotEmpty()) {
+                        _sessions.value = _sessions.value + newSessions
+                    }
                     more = result.hasMore
                     currentOffset += limit
                 } catch (e: Exception) {
@@ -179,13 +174,8 @@ class SessionListViewModel @Inject constructor(
                     break
                 }
             }
-            loadingAll = false
         }
     }
-    fun refresh() {
-        loadSessions(refresh = true)
-    }
-
     fun createNewSession() {
         viewModelScope.launch {
             FileLogger.i("SessionListViewModel", "createNewSession() started")
@@ -198,6 +188,10 @@ class SessionListViewModel @Inject constructor(
                 FileLogger.e("SessionListViewModel", "createNewSession() failed", e)
             }
         }
+    }
+
+    fun refresh() {
+        loadSessions(refresh = true)
     }
 
     fun selectSession(sessionId: String) {
