@@ -666,6 +666,38 @@ private fun ToolVisibilitySettingItem(
                     )
                     Spacer(modifier = Modifier.height(Spacing.sm))
 
+                    // 全选所有工具
+                    val allToolNames = remember(customToolsByCategory) {
+                        val names = mutableSetOf<String>()
+                        TOOL_CATEGORIES.forEach { (_, tools) -> names.addAll(tools) }
+                        customToolsByCategory.forEach { (_, tools) -> names.addAll(tools) }
+                        names
+                    }
+                    val allSelected = allToolNames.isNotEmpty() && allToolNames.all { it in localHidden }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Checkbox(
+                            checked = allSelected,
+                            onCheckedChange = { checked ->
+                                localHidden = if (checked) localHidden + allToolNames else localHidden - allToolNames
+                            }
+                        )
+                        Text(
+                            text = "隐藏所有工具",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "${localHidden.size} / ${allToolNames.size}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(Spacing.sm))
+
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -682,12 +714,30 @@ private fun ToolVisibilitySettingItem(
                             }
                             if (filteredTools.isNotEmpty()) {
                                 item {
-                                    Text(
-                                        text = category,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(vertical = Spacing.xs)
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = Spacing.xs)
+                                    ) {
+                                        Text(
+                                            text = category,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Checkbox(
+                                            checked = filteredTools.isNotEmpty() && filteredTools.all { it in localHidden },
+                                            onCheckedChange = { checked ->
+                                                localHidden = if (checked) localHidden + filteredTools.toSet() else localHidden - filteredTools.toSet()
+                                            }
+                                        )
+                                        Text(
+                                            text = "全选",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                                 items(filteredTools, key = { "builtin|$category|$it" }) { tool ->
                                     ToolCheckRow(
@@ -711,12 +761,30 @@ private fun ToolVisibilitySettingItem(
                                 }
                                 if (filteredTools.isNotEmpty()) {
                                     item {
-                                        Text(
-                                            text = "$category（自定义）",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = MaterialTheme.colorScheme.tertiary,
-                                            modifier = Modifier.padding(vertical = Spacing.xs)
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = Spacing.xs)
+                                        ) {
+                                            Text(
+                                                text = "$category（自定义）",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = MaterialTheme.colorScheme.tertiary,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Checkbox(
+                                                checked = filteredTools.isNotEmpty() && filteredTools.all { it in localHidden },
+                                                onCheckedChange = { checked ->
+                                                    localHidden = if (checked) localHidden + filteredTools.toSet() else localHidden - filteredTools.toSet()
+                                                }
+                                            )
+                                            Text(
+                                                text = "全选",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
                                     items(filteredTools, key = { "custom|$category|$it" }) { tool ->
                                         ToolCheckRow(
