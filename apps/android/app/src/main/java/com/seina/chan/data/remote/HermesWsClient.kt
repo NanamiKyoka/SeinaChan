@@ -229,14 +229,15 @@ class HermesWsClient(
             reconnectAttempts++
             // 获取最新 URL：有 urlProvider 则调用获取（OAUTH 重连重新登录），否则用 lastUrl
             val targetUrl = urlProvider?.invoke() ?: lastUrl ?: return@launch
-            doConnect(targetUrl)
+            connectLock.withLock {
+                if (_state.value == ConnectionState.Open || _state.value == ConnectionState.Connecting) {
+                    FileLogger.i("HermesWsClient", "scheduleReconnect() 跳过，已连接")
+                    return@withLock
+                }
+                doConnect(targetUrl)
+            }
         }
     }
-
-    /**
-     * 立即触发重连，跳过指数退避等待。
-     * 供应用回到前台时调用，实现快速恢复连接。
-     */
     fun reconnectImmediately() {
         scope.launch {
             connectLock.withLock {
@@ -248,6 +249,11 @@ class HermesWsClient(
                 reconnectJob?.cancel()
                 reconnectJob = null
                 reconnectAttempts = 0
+                // 关闭旧 WebSocket 防止后续 request 误发到正在关闭的连接上
+                try {
+                    session?.close()
+                } catch (_: Exception) {}
+                session = null
                 // 获取最新 URL：有 urlProvider 则调用获取（OAUTH 重连重新登录），否则用 lastUrl
                 val targetUrl = urlProvider?.invoke() ?: lastUrl
                 if (targetUrl == null) {

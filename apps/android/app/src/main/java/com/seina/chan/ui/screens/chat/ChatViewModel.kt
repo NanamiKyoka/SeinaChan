@@ -110,10 +110,17 @@ class ChatViewModel @Inject constructor(
                         currentWsSessionId = sid
                         rpcResumeMessages = currentDbSessionId to messages
                         chatRepository.finalizeAllStreamingMessages()
+                        chatRepository.setMessages(messages)  // 用服务器消息覆盖本地缓存
                         FileLogger.i("ChatViewModel", "Auto-resume after reconnect succeeded, sid=$sid")
                     } catch (e: Exception) {
                         FileLogger.w("ChatViewModel", "Auto-resume after reconnect failed: ${e.message}")
-                        currentWsSessionId = ""
+                        try {
+                            doCreateSession()
+                            FileLogger.i("ChatViewModel", "Auto-resume fallback: created new session dbId=$currentDbSessionId")
+                        } catch (e2: Exception) {
+                            FileLogger.e("ChatViewModel", "Auto-resume fallback also failed: ${e2.message}")
+                            currentWsSessionId = ""
+                        }
                     }
                 }
                 previousState = state
@@ -128,10 +135,17 @@ class ChatViewModel @Inject constructor(
                     currentWsSessionId = sid
                     rpcResumeMessages = currentDbSessionId to messages
                     chatRepository.finalizeAllStreamingMessages()
+                    chatRepository.setMessages(messages)  // 用服务器消息覆盖本地缓存
                     FileLogger.i("ChatViewModel", "Immediate resume after recreation succeeded, sid=$sid")
                 } catch (e: Exception) {
                     FileLogger.w("ChatViewModel", "Immediate resume after recreation failed: ${e.message}")
-                    currentWsSessionId = ""
+                    try {
+                        doCreateSession()
+                        FileLogger.i("ChatViewModel", "Immediate resume fallback: created new session dbId=$currentDbSessionId")
+                    } catch (e2: Exception) {
+                        FileLogger.e("ChatViewModel", "Immediate resume fallback also failed: ${e2.message}")
+                        currentWsSessionId = ""
+                    }
                 }
             }
         }
@@ -270,14 +284,14 @@ class ChatViewModel @Inject constructor(
                 currentDbSessionId
             } catch (e: Exception) {
                 FileLogger.w("ChatViewModel", "ensureSession() stored session expired, creating new: ${e.message}")
-                currentDbSessionId = ""
                 currentWsSessionId = ""
+                // 不提前清空 currentDbSessionId — doCreateSession 成功后会自动覆盖
                 doCreateSession()
             }
         } else {
             if (forceNew) {
-                currentDbSessionId = ""
                 currentWsSessionId = ""
+                // 不提前清空 currentDbSessionId — doCreateSession 成功后会自动覆盖
             }
             return doCreateSession()
         }
