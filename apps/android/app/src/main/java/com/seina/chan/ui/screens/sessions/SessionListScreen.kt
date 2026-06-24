@@ -17,11 +17,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -75,8 +72,6 @@ fun SessionListScreen(
     val hasMore by viewModel.hasMore.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     var selectedSessionId by remember { mutableStateOf<String?>(null) }
-    var menuSession by remember { mutableStateOf<Session?>(null) }
-    var showMenu by remember { mutableStateOf(false) }
     var renameSession by remember { mutableStateOf<Session?>(null) }
     var renameText by remember { mutableStateOf("") }
 
@@ -238,40 +233,19 @@ fun SessionListScreen(
                     ) {
                         items(sessions.size) { index ->
                             val session = sessions[index]
-                            Box {
-                                SessionListItem(
-                                    session = session,
-                                    isSelected = session.id == selectedSessionId,
-                                    isLast = index == sessions.lastIndex,
-                                    onClick = { viewModel.selectSession(session.id) },
-                                    onLongClick = {
-                                        menuSession = session
-                                        showMenu = true
-                                    },
-                                    onUndo = { viewModel.undoSession(session.id) },
-                                    onCompress = { viewModel.compressSession(session.id) }
-                                )
-                                DropdownMenu(
-                                    expanded = showMenu && menuSession?.id == session.id,
-                                    onDismissRequest = { showMenu = false }
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("重命名") },
-                                        onClick = {
-                                            renameSession = menuSession
-                                            renameText = menuSession?.title ?: ""
-                                            showMenu = false
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("删除") },
-                                        onClick = {
-                                            menuSession?.let { viewModel.deleteSession(it.id) }
-                                            showMenu = false
-                                        }
-                                    )
-                                }
-                            }
+                            SessionListItem(
+                                session = session,
+                                isSelected = session.id == selectedSessionId,
+                                isLast = index == sessions.lastIndex,
+                                onClick = { viewModel.selectSession(session.id) },
+                                onRename = {
+                                    renameSession = session
+                                    renameText = session.title ?: ""
+                                },
+                                onDelete = { viewModel.deleteSession(session.id) },
+                                onUndo = { viewModel.undoSession(session.id) },
+                                onCompress = { viewModel.compressSession(session.id) }
+                            )
                         }
 
                         // 底部加载指示器或加载更多按钮

@@ -1,8 +1,6 @@
 package com.seina.chan.ui.screens.sessions
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,14 +32,14 @@ import com.seina.chan.ui.theme.AppShapes
 import com.seina.chan.ui.theme.Spacing
 import com.seina.chan.ui.theme.TextStyles
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SessionListItem(
     session: Session,
     isSelected: Boolean,
     isLast: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit = {},
+    onRename: () -> Unit = {},
+    onDelete: () -> Unit = {},
     onUndo: () -> Unit = {},
     onCompress: () -> Unit = {}
 ) {
@@ -53,10 +51,7 @@ fun SessionListItem(
                 shape = AppShapes.md
             )
             .background(if (isSelected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
+            .clickable { onClick() }
     ) {
         Column(modifier = Modifier.padding(Spacing.md)) {
             Row(
@@ -97,6 +92,20 @@ fun SessionListItem(
                             text = { Text("压缩上下文") },
                             onClick = {
                                 onCompress()
+                                showOverflow = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("重命名") },
+                            onClick = {
+                                onRename()
+                                showOverflow = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("删除") },
+                            onClick = {
+                                onDelete()
                                 showOverflow = false
                             }
                         )

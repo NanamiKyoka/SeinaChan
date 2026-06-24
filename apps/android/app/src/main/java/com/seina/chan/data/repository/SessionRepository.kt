@@ -1,7 +1,10 @@
 package com.seina.chan.data.repository
 
 import com.seina.chan.data.local.dao.SentImageDao
+import com.seina.chan.data.local.dao.SessionDao
 import com.seina.chan.data.local.entity.SentImageEntity
+import com.seina.chan.data.local.entity.toEntity
+
 import com.seina.chan.data.model.ChatMessage
 import com.seina.chan.data.model.Session
 import com.seina.chan.data.model.ToolCallDetail
@@ -35,8 +38,16 @@ data class SessionsPageResult(
 
 class SessionRepository(
     private val wsClient: HermesWsClient,
-    private val sentImageDao: SentImageDao
+    private val sentImageDao: SentImageDao,
+    private val sessionDao: SessionDao
 ) {
+    /**
+     * 从 Room 缓存获取所有会话，用于初始快速展示。
+     */
+    suspend fun getCachedSessions(): List<Session> {
+        return sessionDao.getAllSessions().map { it.toSession() }
+    }
+
     suspend fun fetchSessions(limit: Int = 20, offset: Int = 0): SessionsPageResult {
         val result = wsClient.request(HermesMethods.SESSION_LIST, buildJsonObject {
             put("limit", limit)
@@ -59,6 +70,15 @@ class SessionRepository(
         } ?: emptyList()
         val total = result.jsonObject["total"]?.jsonPrimitive?.content?.toIntOrNull() ?: sessions.size
         val hasMore = sessions.size >= limit
+
+        // 缓存到 Room
+        val entities = sessions.map { it.toEntity() }
+        if (offset == 0) {
+            sessionDao.replaceAll(entities)
+        } else {
+            sessionDao.upsertSessions(entities)
+        }
+
         return SessionsPageResult(
             sessions = sessions,
             total = total,

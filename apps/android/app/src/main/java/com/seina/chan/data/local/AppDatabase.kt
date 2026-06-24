@@ -6,13 +6,16 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.seina.chan.data.local.dao.MessageDao
 import com.seina.chan.data.local.dao.SentImageDao
+import com.seina.chan.data.local.dao.SessionDao
 import com.seina.chan.data.local.entity.MessageEntity
 import com.seina.chan.data.local.entity.SentImageEntity
+import com.seina.chan.data.local.entity.SessionEntity
 
-@Database(entities = [SentImageEntity::class, MessageEntity::class], version = 3, exportSchema = false)
+@Database(entities = [SentImageEntity::class, MessageEntity::class, SessionEntity::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun sentImageDao(): SentImageDao
     abstract fun messageDao(): MessageDao
+    abstract fun sessionDao(): SessionDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -41,5 +44,20 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE messages ADD COLUMN parentId TEXT DEFAULT NULL")
             }
         }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `sessions` (
+                        `id` TEXT NOT NULL PRIMARY KEY,
+                        `title` TEXT,
+                        `preview` TEXT,
+                        `messageCount` INTEGER NOT NULL DEFAULT 0,
+                        `lastActiveAt` TEXT
+                    )
+                """)
+            }
+        }
     }
 }
+

@@ -9,6 +9,7 @@ import androidx.room.Room
 import com.seina.chan.data.local.AppDatabase
 import com.seina.chan.data.local.dao.MessageDao
 import com.seina.chan.data.local.dao.SentImageDao
+import com.seina.chan.data.local.dao.SessionDao
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.data.repository.ChatRepository
 import com.seina.chan.data.repository.ConnectionRepository
@@ -79,7 +80,7 @@ object AppModule {
             context,
             AppDatabase::class.java,
             "seina_chan_db"
-        ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+        ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
             .build()
     }
 
@@ -94,14 +95,21 @@ object AppModule {
     fun provideMessageDao(database: AppDatabase): MessageDao {
         return database.messageDao()
     }
+    @Provides
+    @Singleton
+    fun provideSessionDao(database: AppDatabase): SessionDao {
+        return database.sessionDao()
+    }
+
 
     @Provides
     @Singleton
     fun provideSessionRepository(
         wsClient: HermesWsClient,
-        sentImageDao: SentImageDao
+        sentImageDao: SentImageDao,
+        sessionDao: SessionDao
     ): SessionRepository {
-        return SessionRepository(wsClient, sentImageDao)
+        return SessionRepository(wsClient, sentImageDao, sessionDao)
     }
 
     @Provides

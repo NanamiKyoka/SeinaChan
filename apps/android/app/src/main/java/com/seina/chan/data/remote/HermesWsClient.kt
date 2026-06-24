@@ -57,6 +57,7 @@ class HermesWsClient(
             HermesMethods.SESSION_RESUME to 30_000L,
             HermesMethods.PROMPT_SUBMIT to 300_000L,
             HermesMethods.IMAGE_ATTACH_BYTES to 120_000L,
+            HermesMethods.SESSION_LIST to 15_000L,
         )
         private const val DEFAULT_TIMEOUT = 60_000L
 

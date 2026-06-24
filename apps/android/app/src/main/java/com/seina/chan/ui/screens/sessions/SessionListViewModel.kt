@@ -106,13 +106,23 @@ class SessionListViewModel @Inject constructor(
      */
     fun loadSessions(refresh: Boolean = false) {
         viewModelScope.launch {
+            val wasEmpty = _sessions.value.isEmpty()
+
             if (refresh) {
                 offset = 0
                 _sessions.value = emptyList()
                 _isRefreshing.value = true
             } else {
-                // 如果当前列表为空（初始加载），offset 保持 0；否则追加加载
-                if (_sessions.value.isNotEmpty()) {
+                // 初始加载：先展示 Room 缓存，offset 保持 0
+                if (wasEmpty) {
+                    val cached = sessionRepository.getCachedSessions()
+                    if (cached.isNotEmpty()) {
+                        _sessions.value = cached
+                        FileLogger.i("SessionListViewModel", "loadSessions() loaded ${cached.size} sessions from cache")
+                    }
+                }
+                // 非初始加载（加载更多）才推进 offset
+                if (!wasEmpty) {
                     offset += limit
                 }
                 _isLoading.value = true
@@ -121,12 +131,16 @@ class SessionListViewModel @Inject constructor(
             try {
                 val result = sessionRepository.fetchSessions(limit = limit, offset = offset)
                 FileLogger.i("SessionListViewModel", "loadSessions(refresh=$refresh) succeeded, count=${result.sessions.size}, total=${result.total}")
-                _sessions.value = _sessions.value + result.sessions
+                // 初始或刷新时替换列表，避免 cache + network 重复；加载更多时追加
+                if (wasEmpty || refresh) {
+                    _sessions.value = result.sessions
+                } else {
+                    _sessions.value = _sessions.value + result.sessions
+                }
                 _hasMore.value = result.hasMore
             } catch (e: Exception) {
                 FileLogger.e("SessionListViewModel", "loadSessions(refresh=$refresh) failed", e)
                 if (!refresh && _sessions.value.isNotEmpty()) {
-                    // 加载更多失败时回退 offset
                     offset -= limit
                     if (offset < 0) offset = 0
                 }
