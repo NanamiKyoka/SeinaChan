@@ -38,10 +38,10 @@ class ConnectViewModel @Inject constructor(
         val port: String = "9119",
         val token: String = "",
         val username: String = "",
+        val authMode: AuthMode = AuthMode.TOKEN,
         val isLoading: Boolean = false,
         val error: String? = null,
         val testStatus: TestStatus = TestStatus.None,
-        val authRequired: Boolean? = null,
         val authProbing: Boolean = false
     )
 
@@ -58,7 +58,7 @@ class ConnectViewModel @Inject constructor(
             if (config != null) {
                 val ip = config.ip
                 val port = config.port.ifBlank { "9119" }
-                _uiState.value = _uiState.value.copy(ip = ip, port = port, token = config.token, username = config.username)
+                _uiState.value = _uiState.value.copy(ip = ip, port = port, token = config.token, username = config.username, authMode = config.authMode)
                 FileLogger.i("ConnectViewModel", "init - loaded config ip=$ip, port=$port")
 
                 // 若当前已连接且已有配置，自动跳转到聊天界面
@@ -88,6 +88,11 @@ class ConnectViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(username = username, error = null)
     }
 
+    fun onAuthModeChange(authMode: AuthMode) {
+        _uiState.value = _uiState.value.copy(authMode = authMode, error = null, testStatus = TestStatus.None)
+        FileLogger.i("ConnectViewModel", "onAuthModeChange: $authMode")
+    }
+
     fun testConnection() {
         viewModelScope.launch {
             val state = _uiState.value
@@ -95,15 +100,15 @@ class ConnectViewModel @Inject constructor(
             val port = state.port.trim()
             val token = state.token.trim()
             val username = state.username.trim()
-            FileLogger.i("ConnectViewModel", "testConnection() ip=$ip, port=$port, hasToken=${token.isNotEmpty()}, hasUsername=${username.isNotEmpty()}")
+            val authMode = state.authMode
+            FileLogger.i("ConnectViewModel", "testConnection() ip=$ip, port=$port, mode=$authMode")
 
             if (ip.isBlank() || port.isBlank()) {
                 _uiState.value = _uiState.value.copy(testStatus = TestStatus.Error("请输入 IP 和端口"))
                 return@launch
             }
 
-            _uiState.value = _uiState.value.copy(testStatus = TestStatus.Testing)
-            val result = connectionRepository.testConnection(ip, port, token, username)
+            val result = connectionRepository.testConnection(ip, port, token, username, authMode)
             if (result.isSuccess) {
                 FileLogger.i("ConnectViewModel", "testConnection() succeeded")
                 _uiState.value = _uiState.value.copy(testStatus = TestStatus.Success(result.getOrDefault("连接成功")))
@@ -121,7 +126,8 @@ class ConnectViewModel @Inject constructor(
             val port = _uiState.value.port.trim()
             val token = _uiState.value.token.trim()
             val username = _uiState.value.username.trim()
-            FileLogger.i("ConnectViewModel", "connect() ip=$ip, port=$port, tokenPrefix=${token.take(4)}, hasUsername=${username.isNotEmpty()}")
+            val authMode = _uiState.value.authMode
+            FileLogger.i("ConnectViewModel", "connect() ip=$ip, port=$port, mode=$authMode")
             if (ip.isBlank()) {
                 _uiState.value = _uiState.value.copy(error = "请输入服务器地址")
                 return@launch
@@ -132,8 +138,7 @@ class ConnectViewModel @Inject constructor(
             }
 
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-
-            val config = ConnectionConfig(ip = ip, port = port, token = token, username = username)
+            val config = ConnectionConfig(ip = ip, port = port, token = token, username = username, authMode = authMode)
             val result = connectionRepository.connect(config)
 
             if (result.isSuccess) {
@@ -164,7 +169,8 @@ class ConnectViewModel @Inject constructor(
                 ip = current.ip.trim(),
                 port = current.port.trim(),
                 token = current.token.trim(),
-                username = current.username.trim()
+                username = current.username.trim(),
+                authMode = current.authMode
             )
             settingsRepository.addConnectionProfile(profile)
             FileLogger.i("ConnectViewModel", "saveCurrentAsProfile() name=$name")
@@ -177,12 +183,13 @@ class ConnectViewModel @Inject constructor(
             FileLogger.i("ConnectViewModel", "deleteProfile() id=$profileId")
         }
     }
-
     fun loadProfile(profile: ConnectionProfile) {
         _uiState.value = _uiState.value.copy(
             ip = profile.ip,
             port = profile.port.ifBlank { "9119" },
+            token = profile.token,
             username = profile.username,
+            authMode = profile.authMode,
             error = null,
             testStatus = TestStatus.None
         )

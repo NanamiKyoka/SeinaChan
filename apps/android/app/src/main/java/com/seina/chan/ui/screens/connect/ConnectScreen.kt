@@ -73,6 +73,7 @@ fun ConnectScreen(
     var editPort by remember { mutableStateOf("") }
     var editToken by remember { mutableStateOf("") }
     var editUsername by remember { mutableStateOf("") }
+    var editAuthMode by remember { mutableStateOf(com.seina.chan.data.model.AuthMode.TOKEN) }
 
     LaunchedEffect(Unit) {
         viewModel.navigateToChat.collect { success ->
@@ -133,8 +134,55 @@ fun ConnectScreen(
             )
 
 
-            // 用户名输入框（OAUTH 模式）
-            if (uiState.authRequired == true) {
+            // 认证模式切换
+            val isOauth = uiState.authMode == com.seina.chan.data.model.AuthMode.OAUTH
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Token 模式按钮
+                val tokenSelected = !isOauth
+                OutlinedButton(
+                    onClick = { viewModel.onAuthModeChange(com.seina.chan.data.model.AuthMode.TOKEN) },
+                    modifier = Modifier.weight(1f),
+                    enabled = !uiState.isLoading,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (tokenSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                        contentColor = if (tokenSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                    border = BorderStroke(
+                        1.dp,
+                        if (tokenSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    ),
+                    shape = AppShapes.md
+                ) {
+                    Text("Token 直连", style = TextStyles.bodySm)
+                }
+
+                // OAUTH 模式按钮
+                val oauthSelected = isOauth
+                OutlinedButton(
+                    onClick = { viewModel.onAuthModeChange(com.seina.chan.data.model.AuthMode.OAUTH) },
+                    modifier = Modifier.weight(1f),
+                    enabled = !uiState.isLoading,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (oauthSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                        contentColor = if (oauthSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                    border = BorderStroke(
+                        1.dp,
+                        if (oauthSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    ),
+                    shape = AppShapes.md
+                ) {
+                    Text("密码登录", style = TextStyles.bodySm)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(Spacing.md))
+
+            // 用户名输入框（仅 OAUTH 模式）
+            if (isOauth) {
                 OutlinedTextField(
                     value = uiState.username,
                     onValueChange = viewModel::onUsernameChange,
@@ -148,13 +196,13 @@ fun ConnectScreen(
                 )
                 Spacer(modifier = Modifier.height(Spacing.md))
             }
-            Spacer(modifier = Modifier.height(Spacing.md))
 
+            // Token / 密码输入框
             OutlinedTextField(
                 value = uiState.token,
                 onValueChange = viewModel::onTokenChange,
-                label = { if (uiState.authRequired == true) Text("密码") else Text("Token (可选)") },
-                placeholder = { if (uiState.authRequired == true) Text("Hermes 登录密码") else Text("留空则使用默认认证") },
+                label = { if (isOauth) Text("密码") else Text("Token") },
+                placeholder = { if (isOauth) Text("Hermes 登录密码") else Text("留空则使用默认认证") },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !uiState.isLoading,
                 singleLine = true,
@@ -269,6 +317,7 @@ fun ConnectScreen(
                             editPort = profile.port
                             editToken = profile.token
                             editUsername = profile.username
+                            editAuthMode = profile.authMode
                             showEditDialog = true
                         },
                         onRename = {
@@ -411,25 +460,66 @@ fun ConnectScreen(
                         colors = outlinedTextFieldColors()
                     )
                     Spacer(modifier = Modifier.height(Spacing.sm))
+                    // 编辑对话框：认证模式选择
+                    val isEditOauth = editAuthMode == com.seina.chan.data.model.AuthMode.OAUTH
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val editTokenSelected = !isEditOauth
+                        OutlinedButton(
+                            onClick = { editAuthMode = com.seina.chan.data.model.AuthMode.TOKEN },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (editTokenSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                                contentColor = if (editTokenSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                if (editTokenSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                            ),
+                            shape = AppShapes.md
+                        ) {
+                            Text("Token", style = TextStyles.bodySm)
+                        }
+                        OutlinedButton(
+                            onClick = { editAuthMode = com.seina.chan.data.model.AuthMode.OAUTH },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (isEditOauth) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                                contentColor = if (isEditOauth) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isEditOauth) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                            ),
+                            shape = AppShapes.md
+                        ) {
+                            Text("密码", style = TextStyles.bodySm)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(Spacing.sm))
                     OutlinedTextField(
                         value = editToken,
                         onValueChange = { editToken = it },
-                        label = { Text("Token (可选)") },
+                        label = { if (isEditOauth) Text("密码") else Text("Token") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = AppShapes.md,
                         colors = outlinedTextFieldColors()
                     )
-                    Spacer(modifier = Modifier.height(Spacing.sm))
-                    OutlinedTextField(
-                        value = editUsername,
-                        onValueChange = { editUsername = it },
-                        label = { Text("用户名") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = AppShapes.md,
-                        colors = outlinedTextFieldColors()
-                    )
+                    if (isEditOauth) {
+                        Spacer(modifier = Modifier.height(Spacing.sm))
+                        OutlinedTextField(
+                            value = editUsername,
+                            onValueChange = { editUsername = it },
+                            label = { Text("用户名") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = AppShapes.md,
+                            colors = outlinedTextFieldColors()
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -441,7 +531,8 @@ fun ConnectScreen(
                                     ip = editIp.trim(),
                                     port = editPort.trim(),
                                     token = editToken.trim(),
-                                    username = editUsername.trim()
+                                    username = editUsername.trim(),
+                                    authMode = editAuthMode
                                 )
                             )
                         }

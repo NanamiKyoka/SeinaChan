@@ -22,17 +22,12 @@ class ConnectionRepository(
     suspend fun connect(config: ConnectionConfig): Result<Unit> {
         val httpBaseUrl = parseHttpBaseUrl(config.ip, config.port)
         val wsBaseUrl = parseConnectionUrls(config.ip, config.port)
-        FileLogger.i("ConnectionRepository", "connect() httpBaseUrl=$httpBaseUrl, wsBaseUrl=$wsBaseUrl")
+        FileLogger.i("ConnectionRepository", "connect() httpBaseUrl=$httpBaseUrl, wsBaseUrl=$wsBaseUrl, mode=${config.authMode}")
         return try {
-            // Step A: 探测 auth 模式
-            val actualMode = try {
-                authRepository.detectAuthMode(httpBaseUrl)
-            } catch (e: Exception) {
-                FileLogger.w("ConnectionRepository", "/api/status 不可达，回退到 TOKEN 模式", e)
-                AuthMode.TOKEN
-            }
+            // 使用用户选择的 authMode，不再探测
+            val actualMode = config.authMode
 
-            // Step B: 构造完整 WS URL 和 urlProvider
+            // 构造完整 WS URL 和 urlProvider
             val fullWsUrl: String
             val urlProvider: (suspend () -> String?)?
             if (actualMode == AuthMode.OAUTH) {
@@ -60,7 +55,7 @@ class ConnectionRepository(
                 urlProvider = { fullWsUrl }
             }
 
-            // Step C: WebSocket 连接
+            // WebSocket 连接
             val connected = wsClient.connect(fullWsUrl, urlProvider)
             return if (connected) {
                 wsClient.enableReconnect(true)
@@ -76,21 +71,13 @@ class ConnectionRepository(
         }
     }
 
-    suspend fun testConnection(ip: String, port: String, token: String = "", username: String = ""): Result<String> {
+    suspend fun testConnection(ip: String, port: String, token: String = "", username: String = "", authMode: AuthMode = AuthMode.TOKEN): Result<String> {
         val httpBaseUrl = parseHttpBaseUrl(ip, port)
         val wsBaseUrl = parseConnectionUrls(ip, port)
-        FileLogger.i("ConnectionRepository", "testConnection() wsBaseUrl=$wsBaseUrl")
+        FileLogger.i("ConnectionRepository", "testConnection() wsBaseUrl=$wsBaseUrl, mode=$authMode")
         return try {
-            // 探测 auth 模式
-            val actualMode = try {
-                authRepository.detectAuthMode(httpBaseUrl)
-            } catch (e: Exception) {
-                FileLogger.w("ConnectionRepository", "/api/status 不可达，回退到 TOKEN 模式", e)
-                AuthMode.TOKEN
-            }
-
             val fullWsUrl: String
-            if (actualMode == AuthMode.OAUTH) {
+            if (authMode == AuthMode.OAUTH) {
                 val loginOk = authRepository.passwordLogin(httpBaseUrl, username, token)
                 if (!loginOk) return Result.failure(Exception("认证失败：用户名或密码错误"))
 
@@ -105,7 +92,7 @@ class ConnectionRepository(
             val connected = wsClient.connect(fullWsUrl, null)
             if (connected) {
                 wsClient.disconnect()
-                FileLogger.i("ConnectionRepository", "testConnection() succeeded, mode=$actualMode")
+                FileLogger.i("ConnectionRepository", "testConnection() succeeded, mode=$authMode")
                 Result.success("连接成功")
             } else {
                 FileLogger.e("ConnectionRepository", "testConnection() failed")
