@@ -107,7 +107,7 @@ fun SessionListScreen(
         }
             .distinctUntilChanged()
             .collect { reachedEnd ->
-                if (reachedEnd && hasMore && !isLoadingMore && !isLoading && !isRefreshing) {
+                if (reachedEnd && hasMore && !isLoadingMore && !isLoading && !isRefreshing && searchQuery.isEmpty()) {
                     viewModel.loadMore()
                 }
             }

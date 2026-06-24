@@ -179,18 +179,15 @@ class SessionListViewModel @Inject constructor(
             }
         }
     }
-
-    /**
-     * 加载所有会话（用于搜索时确保本地过滤覆盖全部会话）
-     */
     private fun loadAllSessions() {
         viewModelScope.launch {
             var currentOffset = 0
-            while (_hasMore.value) {
+            var more = true
+            while (more) {
                 try {
                     val result = sessionRepository.fetchSessions(limit = limit, offset = currentOffset)
                     _sessions.value = _sessions.value + result.sessions
-                    _hasMore.value = result.hasMore
+                    more = result.hasMore
                     currentOffset += limit
                 } catch (e: Exception) {
                     FileLogger.e("SessionListViewModel", "loadAllSessions() failed at offset=$currentOffset", e)

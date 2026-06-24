@@ -68,8 +68,8 @@ class SessionRepository(
                     ?: item["started_at"]?.jsonPrimitive?.content
             )
         } ?: emptyList()
-        val total = result.jsonObject["total"]?.jsonPrimitive?.content?.toIntOrNull() ?: sessions.size
-        val hasMore = sessions.size >= limit
+        val total = result.jsonObject["total"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+        val hasMore = if (total > 0) offset + limit < total else sessions.size >= limit
 
         // 缓存到 Room
         val entities = sessions.map { it.toEntity() }
