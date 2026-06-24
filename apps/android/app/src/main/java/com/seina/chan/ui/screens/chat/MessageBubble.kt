@@ -88,7 +88,6 @@ fun MessageBubble(
             horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // 思考链面板（仅 assistant 消息显示）
             if (effectiveShowReasoning && (message.isReasoning || message.reasoningText.isNotBlank())) {
                 ReasoningPanel(
                     reasoningText = message.reasoningText,
@@ -96,7 +95,6 @@ fun MessageBubble(
                 )
             }
 
-            // 工具调用卡片列表（仅 assistant 消息显示，过滤隐藏的工具）
             if (effectiveShowToolCalls) {
                 val visibleCalls = message.toolCalls.filter { it.name !in hiddenToolNames }
                 visibleCalls.forEach { toolCall ->
@@ -116,13 +114,11 @@ fun MessageBubble(
                     )
                 }
             }
-            // 判断气泡内是否有实际内容
             val hasImage = message.imageUrl != null || isImageContent(message.content)
             val bubbleDisplayText = if (fileSections.isNotEmpty()) textBeforeFile else message.content
             val hasText = bubbleDisplayText.isNotBlank() && !isImageContent(message.content)
             val isTypingOnly = message.isStreaming && message.content.isEmpty() && message.imageUrl == null
 
-            // 消息气泡
             var showMenu by remember { mutableStateOf(false) }
             var pressOffset by remember { mutableStateOf(Offset.Zero) }
             var showSelectionDialog by remember { mutableStateOf(false) }
@@ -140,7 +136,6 @@ fun MessageBubble(
                     TypingIndicator()
                 } else if (hasImage || hasText) {
                     Column {
-                        // 图片
                         if (hasImage) {
                             val imageModel = message.imageUrl ?: message.content
                             AsyncImage(
@@ -157,7 +152,6 @@ fun MessageBubble(
                                 contentScale = ContentScale.Crop
                             )
                         }
-                        // 文本内容
                         if (hasText) {
                             Box {
                                 if (isUser) {
@@ -284,7 +278,6 @@ fun MessageBubble(
                 }
             }
 
-            // 时间戳
             if (showTimestamps && message.createdAt > 0) {
                 Text(
                     text = formatTimestamp(message.createdAt),

@@ -27,7 +27,6 @@ class ConnectionRepository(
             // 使用用户选择的 authMode，不再探测
             val actualMode = config.authMode
 
-            // 构造完整 WS URL 和 urlProvider
             val fullWsUrl: String
             val urlProvider: (suspend () -> String?)?
             if (actualMode == AuthMode.OAUTH) {
@@ -55,7 +54,6 @@ class ConnectionRepository(
                 urlProvider = { fullWsUrl }
             }
 
-            // WebSocket 连接
             val connected = wsClient.connect(fullWsUrl, urlProvider)
             return if (connected) {
                 wsClient.enableReconnect(true)

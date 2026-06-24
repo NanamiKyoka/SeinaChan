@@ -31,11 +31,14 @@ class SettingsRepository(
     val connectionIp: Flow<String> = dataStore.data.map { it[CONNECTION_IP_KEY] ?: "" }
     val connectionPort: Flow<String> = dataStore.data.map { it[CONNECTION_PORT_KEY] ?: "" }
     val connectionToken: Flow<String> = dataStore.data.map { it[CONNECTION_TOKEN_KEY] ?: "" }
+    val connectionUsername: Flow<String> = dataStore.data.map { it[CONNECTION_USERNAME_KEY] ?: "" }
+    val connectionAuthMode: Flow<String> = dataStore.data.map { it[CONNECTION_AUTH_MODE_KEY] ?: "TOKEN" }
     val hiddenToolNames: Flow<Set<String>> = dataStore.data.map { it[HIDDEN_TOOL_NAMES_KEY] ?: emptySet() }
     /** 自定义工具链，格式为 "category|tool_name" 的 Set */
     val customTools: Flow<Set<String>> = dataStore.data.map { it[CUSTOM_TOOLS_KEY] ?: emptySet() }
     /** 用户选择的模型，格式为 "provider/model" */
     val selectedModel: Flow<String> = dataStore.data.map { it[SELECTED_MODEL_KEY] ?: "" }
+
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -45,6 +48,16 @@ class SettingsRepository(
             json.decodeFromString(serializer<List<ConnectionProfile>>(), jsonStr)
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    /** 自定义主题颜色映射 */
+    val customThemeColors: Flow<Map<String, Long>?> = dataStore.data.map { prefs ->
+        val jsonStr = prefs[CUSTOM_THEME_COLORS_KEY] ?: return@map null
+        try {
+            json.decodeFromString(serializer<Map<String, Long>>(), jsonStr)
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -108,6 +121,14 @@ class SettingsRepository(
         safeEdit { prefs -> prefs[CONNECTION_TOKEN_KEY] = value }
     }
 
+    suspend fun setConnectionUsername(value: String) {
+        safeEdit { prefs -> prefs[CONNECTION_USERNAME_KEY] = value }
+    }
+
+    suspend fun setConnectionAuthMode(value: String) {
+        safeEdit { prefs -> prefs[CONNECTION_AUTH_MODE_KEY] = value }
+    }
+
     suspend fun setHiddenToolNames(value: Set<String>) {
         safeEdit { prefs -> prefs[HIDDEN_TOOL_NAMES_KEY] = value }
     }
@@ -148,6 +169,12 @@ class SettingsRepository(
         safeEdit { prefs -> prefs[FONT_PRESET_KEY] = value }
     }
 
+    suspend fun setCustomThemeColors(colors: Map<String, Long>) {
+        safeEdit { prefs ->
+            prefs[CUSTOM_THEME_COLORS_KEY] = json.encodeToString(serializer<Map<String, Long>>(), colors)
+        }
+    }
+
 
     companion object {
         private val PAGE_SIZE_KEY = intPreferencesKey("page_size")
@@ -160,11 +187,14 @@ class SettingsRepository(
         private val CONNECTION_IP_KEY = stringPreferencesKey("ip")
         private val CONNECTION_PORT_KEY = stringPreferencesKey("port")
         private val CONNECTION_TOKEN_KEY = stringPreferencesKey("token")
+        private val CONNECTION_USERNAME_KEY = stringPreferencesKey("connection_username")
+        private val CONNECTION_AUTH_MODE_KEY = stringPreferencesKey("connection_auth_mode")
         private val HIDDEN_TOOL_NAMES_KEY = stringSetPreferencesKey("hidden_tool_names")
         private val CUSTOM_TOOLS_KEY = stringSetPreferencesKey("custom_tools")
         private val CONNECTION_PROFILES_KEY = stringPreferencesKey("connection_profiles")
         private val SELECTED_MODEL_KEY = stringPreferencesKey("selected_model")
         private val ACTIVE_THEME_ID_KEY = stringPreferencesKey("active_theme_id")
+        private val CUSTOM_THEME_COLORS_KEY = stringPreferencesKey("custom_theme_colors")
         private val FONT_PRESET_KEY = stringPreferencesKey("font_preset")
     }
 }

@@ -112,7 +112,6 @@ class HermesWsClient(
             }
         }
 
-        // 网络状态监控
         scope.launch {
             networkMonitor.networkAvailableDebounced.collect { available ->
                 if (available) {
@@ -126,7 +125,6 @@ class HermesWsClient(
                         scheduleReconnect()
                     }
                 } else {
-                    // 网络断开，取消重连
                     FileLogger.w("HermesWsClient", "网络断开，取消重连")
                     reconnectJob?.cancel()
                     reconnectJob = null
@@ -170,7 +168,6 @@ class HermesWsClient(
             lastFrameTime = System.currentTimeMillis()
             FileLogger.i("HermesWsClient", "WebSocket handshake succeeded")
 
-            // 启动心跳超时监控
             heartbeatWatchJob?.cancel()
             heartbeatWatchJob = scope.launch {
                 while (true) {

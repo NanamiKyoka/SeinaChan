@@ -308,7 +308,6 @@ fun ChatScreen(
                 .systemBarsPadding()
                 .imePadding()
         ) {
-            // Top bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -396,7 +395,6 @@ fun ChatScreen(
                 }
             }
 
-            // Messages area
             if (uiState.messages.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -465,7 +463,6 @@ fun ChatScreen(
                 }
             }
 
-            // Error message（仅在非空状态时显示，避免与空状态占位符重复）
             if (uiState.messages.isNotEmpty()) {
                 uiState.error?.let { error ->
                     Text(
@@ -479,7 +476,6 @@ fun ChatScreen(
                 }
             }
 
-            // Quote preview
             val quoted = uiState.quotedMessage
             if (quoted != null) {
                 Row(
@@ -512,7 +508,6 @@ fun ChatScreen(
                 }
             }
 
-            // Editing banner
             if (editingMessage != null) {
                 Row(
                     modifier = Modifier
@@ -539,7 +534,6 @@ fun ChatScreen(
                 }
             }
 
-            // Composer
             Composer(
                 value = uiState.currentInput,
                 onValueChange = viewModel::onInputChange,

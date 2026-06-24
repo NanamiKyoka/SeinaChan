@@ -78,7 +78,6 @@ class SessionListViewModel @Inject constructor(
     private val _hasMore = MutableStateFlow(true)
     val hasMore: StateFlow<Boolean> = _hasMore.asStateFlow()
 
-    // 分页状态
     private var offset = 0
     private var limit = 20
 
@@ -88,42 +87,31 @@ class SessionListViewModel @Inject constructor(
                 limit = pageSize
             }
         }
-        // 搜索时自动加载所有会话，确保本地过滤可以覆盖全部会话
         viewModelScope.launch {
             searchQuery
                 .debounce(300)
                 .collect { query ->
-                    if (query.isNotBlank() && _sessions.value.isEmpty()) {
+                    if (query.isNotBlank()) {
+                        // 搜索时加载所有会话确保本地过滤覆盖全部
                         loadAllSessions()
                     }
                 }
         }
     }
 
-    /**
-     * 加载会话列表
-     * @param refresh 是否为刷新操作：true 则重置 offset 并清空列表，false 则追加加载更多
-     */
     fun loadSessions(refresh: Boolean = false) {
+        // 列表已有数据且非强制刷新 → 不重复加载（防止 screen 重走 LaunchedEffect）
+        if (!refresh && _sessions.value.isNotEmpty()) return
         viewModelScope.launch {
-            val wasEmpty = _sessions.value.isEmpty()
-
             if (refresh) {
                 offset = 0
                 _sessions.value = emptyList()
                 _isRefreshing.value = true
             } else {
-                // 初始加载：先展示 Room 缓存，offset 保持 0
-                if (wasEmpty) {
-                    val cached = sessionRepository.getCachedSessions()
-                    if (cached.isNotEmpty()) {
-                        _sessions.value = cached
-                        FileLogger.i("SessionListViewModel", "loadSessions() loaded ${cached.size} sessions from cache")
-                    }
-                }
-                // 非初始加载（加载更多）才推进 offset
-                if (!wasEmpty) {
-                    offset += limit
+                val cached = sessionRepository.getCachedSessions()
+                if (cached.isNotEmpty()) {
+                    _sessions.value = cached
+                    FileLogger.i("SessionListViewModel", "loadSessions() loaded ${cached.size} sessions from cache")
                 }
                 _isLoading.value = true
             }
@@ -131,19 +119,10 @@ class SessionListViewModel @Inject constructor(
             try {
                 val result = sessionRepository.fetchSessions(limit = limit, offset = offset)
                 FileLogger.i("SessionListViewModel", "loadSessions(refresh=$refresh) succeeded, count=${result.sessions.size}, total=${result.total}")
-                // 初始或刷新时替换列表，避免 cache + network 重复；加载更多时追加
-                if (wasEmpty || refresh) {
-                    _sessions.value = result.sessions
-                } else {
-                    _sessions.value = _sessions.value + result.sessions
-                }
+                _sessions.value = result.sessions
                 _hasMore.value = result.hasMore
             } catch (e: Exception) {
                 FileLogger.e("SessionListViewModel", "loadSessions(refresh=$refresh) failed", e)
-                if (!refresh && _sessions.value.isNotEmpty()) {
-                    offset -= limit
-                    if (offset < 0) offset = 0
-                }
                 if (_sessions.value.isEmpty()) {
                     _sessions.value = emptyList()
                 }
@@ -155,9 +134,6 @@ class SessionListViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 加载更多会话
-     */
     fun loadMore() {
         if (!_hasMore.value || _isLoadingMore.value || _isLoading.value || _isRefreshing.value) return
         viewModelScope.launch {
@@ -181,6 +157,7 @@ class SessionListViewModel @Inject constructor(
     }
     private fun loadAllSessions() {
         viewModelScope.launch {
+            _sessions.value = emptyList() // 清空，防止追加重复
             var currentOffset = 0
             var more = true
             while (more) {
@@ -196,10 +173,6 @@ class SessionListViewModel @Inject constructor(
             }
         }
     }
-
-    /**
-     * 下拉刷新
-     */
     fun refresh() {
         loadSessions(refresh = true)
     }

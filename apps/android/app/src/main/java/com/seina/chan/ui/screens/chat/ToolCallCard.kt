@@ -55,7 +55,6 @@ fun ToolCallCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // 顶部行：工具名称 + 状态 + 展开图标
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -66,7 +65,6 @@ fun ToolCallCard(
                 )
                 Spacer(modifier = Modifier.weight(1f))
 
-                // 状态指示器
                 when (toolCall.status) {
                     ToolCallStatus.Running -> {
                         CircularProgressIndicator(
@@ -102,10 +100,8 @@ fun ToolCallCard(
                 )
             }
 
-            // 展开后的详细内容
             AnimatedVisibility(visible = expanded) {
                 Column(modifier = Modifier.padding(top = 8.dp)) {
-                    // 参数 JSON
                     if (toolCall.args.isNotBlank()) {
                         Text(
                             text = "参数:",
@@ -128,7 +124,6 @@ fun ToolCallCard(
                         }
                     }
 
-                    // 结果 JSON
                     if (toolCall.result.isNotBlank()) {
                         Text(
                             text = "结果:",

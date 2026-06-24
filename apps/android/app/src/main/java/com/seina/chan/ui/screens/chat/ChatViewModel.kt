@@ -281,7 +281,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /** 创建新会话并保存到本地存储 */
     private suspend fun doCreateSession(): String {
         val result = sessionRepository.createSession()
         currentDbSessionId = result.storedSessionId
@@ -482,16 +481,9 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 设置选中的图片列表
-     */
     fun onImagesSelected(uris: List<Uri>) {
         _inputState.update { it.copy(selectedImages = uris) }
     }
-
-    /**
-     * 移除一张选中的图片
-     */
     fun removeSelectedImage(uri: Uri) {
         _inputState.update { it.copy(selectedImages = it.selectedImages.filter { u -> u != uri }) }
     }

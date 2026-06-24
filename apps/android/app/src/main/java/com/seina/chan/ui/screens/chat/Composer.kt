@@ -82,7 +82,6 @@ fun Composer(
             onValueChange(editingMessage.content)
         }
     }
-    // 多图选择器启动器
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris: List<Uri> ->
@@ -91,7 +90,6 @@ fun Composer(
         }
     }
 
-    // 文件选择器启动器
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -103,7 +101,6 @@ fun Composer(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // 选中的图片缩略图预览
         if (selectedImages.isNotEmpty()) {
             LazyRow(
                 modifier = Modifier
@@ -127,7 +124,6 @@ fun Composer(
                                 ),
                             contentScale = ContentScale.Crop
                         )
-                        // 移除按钮
                         IconButton(
                             onClick = { onRemoveImage(uri) },
                             modifier = Modifier
@@ -149,7 +145,6 @@ fun Composer(
                 }
             }
             }
-            // 选中的文件预览
             if (selectedFiles.isNotEmpty()) {
                 LazyRow(
                     modifier = Modifier
@@ -259,7 +254,6 @@ fun Composer(
                 ),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 附件菜单
             var menuExpanded by remember { mutableStateOf(false) }
             Box {
                 IconButton(

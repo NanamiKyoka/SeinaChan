@@ -8,6 +8,7 @@ import com.seina.chan.data.model.AuthMode
 import com.seina.chan.data.remote.HermesMethods
 import com.seina.chan.data.model.ConnectionProfile
 import com.seina.chan.data.model.DEFAULT_THEME_ID
+import com.seina.chan.data.model.CUSTOM_THEME_ID
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SettingsRepository
 import com.seina.chan.util.FileLogger
@@ -41,6 +42,8 @@ data class SettingsUiState(
     val connectionIp: String = "",
     val connectionPort: String = "",
     val connectionToken: String = "",
+    val connectionUsername: String = "",
+    val connectionAuthMode: AuthMode = AuthMode.TOKEN,
     val connectionProfiles: List<ConnectionProfile> = emptyList(),
     val hiddenToolNames: Set<String> = emptySet(),
     /** 自定义工具链，格式为 "category|tool_name" */
@@ -58,6 +61,8 @@ data class SettingsUiState(
     val activeThemeId: String = DEFAULT_THEME_ID,
     /** 当前字体预设 ID */
     val fontPresetId: String = "serif-sans",
+    /** 自定义主题的颜色映射 */
+    val customThemeColors: Map<String, Long>? = null,
 )
 
 @HiltViewModel
@@ -122,6 +127,17 @@ class SettingsViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            settingsRepository.connectionUsername.collect { value ->
+                _uiState.update { it.copy(connectionUsername = value) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.connectionAuthMode.collect { value ->
+                val mode = try { AuthMode.valueOf(value) } catch (_: Exception) { AuthMode.TOKEN }
+                _uiState.update { it.copy(connectionAuthMode = mode) }
+            }
+        }
+        viewModelScope.launch {
             settingsRepository.connectionProfiles.collect { value ->
                 _uiState.update { it.copy(connectionProfiles = value) }
             }
@@ -149,6 +165,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.fontPresetId.collect { value ->
                 _uiState.update { it.copy(fontPresetId = value) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.customThemeColors.collect { value ->
+                _uiState.update { it.copy(customThemeColors = value) }
             }
         }
     }
@@ -273,6 +294,18 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setConnectionUsername(value: String) {
+        viewModelScope.launch {
+            settingsRepository.setConnectionUsername(value)
+        }
+    }
+
+    fun setConnectionAuthMode(value: AuthMode) {
+        viewModelScope.launch {
+            settingsRepository.setConnectionAuthMode(value.name)
+        }
+    }
+
     fun setHiddenToolNames(value: Set<String>) {
         viewModelScope.launch {
             settingsRepository.setHiddenToolNames(value)
@@ -373,6 +406,8 @@ class SettingsViewModel @Inject constructor(
         setConnectionIp(ip)
         setConnectionPort(port)
         setConnectionToken(token)
+        setConnectionUsername(username)
+        setConnectionAuthMode(authMode)
         viewModelScope.launch {
             connectionRepository.connect(ConnectionConfig(ip, port, token, username, authMode))
         }
@@ -387,6 +422,17 @@ class SettingsViewModel @Inject constructor(
     fun setFontPresetId(value: String) {
         viewModelScope.launch {
             settingsRepository.setFontPresetId(value)
+        }
+    }
+
+    fun setCustomTheme(primaryArgb: Long, backgroundArgb: Long) {
+        viewModelScope.launch {
+            val colors = mapOf(
+                "primary" to primaryArgb,
+                "background" to backgroundArgb,
+            )
+            settingsRepository.setCustomThemeColors(colors)
+            settingsRepository.setActiveThemeId(CUSTOM_THEME_ID)
         }
     }
 

@@ -164,7 +164,6 @@ class ChatRepository(
         _messages.value += userMessage
         persistMessage(userMessage)
 
-        // 构造 data URI
         val dataUri = "data:$mimeType;base64,$base64Data"
         val params = buildJsonObject {
             put("session_id", wsSessionId)
@@ -621,9 +620,6 @@ class ChatRepository(
 
     // ==================== 持久化相关 ====================
 
-    /**
-     * 将单条消息持久化到 Room
-     */
     private fun persistMessage(message: ChatMessage) {
         val sid = currentSessionId
         if (sid == null) {
@@ -663,9 +659,6 @@ class ChatRepository(
         }
     }
 
-    /**
-     * ChatMessage → MessageEntity
-     */
     private fun ChatMessage.toEntity(sessionId: String): MessageEntity {
         return MessageEntity(
             id = id,
@@ -690,9 +683,6 @@ class ChatRepository(
         )
     }
 
-    /**
-     * MessageEntity → ChatMessage
-     */
     private fun MessageEntity.toChatMessage(): ChatMessage {
         val toolCalls = try {
             json.decodeFromString(

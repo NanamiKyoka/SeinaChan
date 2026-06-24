@@ -78,12 +78,10 @@ fun SessionListScreen(
     val listState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
 
-    // 初始加载
     LaunchedEffect(Unit) {
         viewModel.loadSessions()
     }
 
-    // 监听导航事件
     LaunchedEffect(Unit) {
         viewModel.navigateToSession.collect { sessionId ->
             selectedSessionId = sessionId
@@ -97,7 +95,6 @@ fun SessionListScreen(
         }
     }
 
-    // 检测列表滚动到底部，触发加载更多
     LaunchedEffect(listState, hasMore, isLoadingMore, isLoading, isRefreshing) {
         snapshotFlow {
             val layoutInfo = listState.layoutInfo
@@ -200,7 +197,6 @@ fun SessionListScreen(
             val isSearchActive = searchQuery.isNotEmpty()
 
             if (sessions.isEmpty() && !isLoading && !isRefreshing) {
-                // 空状态提示
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -216,7 +212,6 @@ fun SessionListScreen(
                     )
                 }
             } else if (sessions.isEmpty() && isLoading) {
-                // 初始加载中
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -248,7 +243,6 @@ fun SessionListScreen(
                             )
                         }
 
-                        // 底部加载指示器或加载更多按钮
                         if (isLoadingMore) {
                             item {
                                 Box(

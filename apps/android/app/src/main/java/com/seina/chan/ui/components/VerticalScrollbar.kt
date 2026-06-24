@@ -55,7 +55,6 @@ fun VerticalScrollbar(
                         val trackHeight = size.height.toFloat()
                         val downY = down.position.y.coerceIn(0f, trackHeight)
 
-                        // 点击直接跳转到对应比例位置
                         val clickFraction = downY / trackHeight
                         val targetIndex = (clickFraction * totalItems)
                             .toInt()
@@ -64,7 +63,6 @@ fun VerticalScrollbar(
                             state.animateScrollToItem(targetIndex)
                         }
 
-                        // 持续拖拽跟踪
                         drag(down.id) { change ->
                             if (change.positionChange() != androidx.compose.ui.geometry.Offset.Zero) {
                                 val dragY = change.position.y.coerceIn(0f, trackHeight)
@@ -87,7 +85,6 @@ fun VerticalScrollbar(
         val maxOffset = trackHeight - thumbHeight
         val offsetY = maxOffset * scrollFraction
 
-        // 视觉 thumb，保持细长
         Box(
             modifier = Modifier
                 .padding(end = 4.dp, top = 4.dp, bottom = 4.dp)

@@ -134,13 +134,11 @@ fun ConnectScreen(
             )
 
 
-            // 认证模式切换
             val isOauth = uiState.authMode == com.seina.chan.data.model.AuthMode.OAUTH
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Token 模式按钮
                 val tokenSelected = !isOauth
                 OutlinedButton(
                     onClick = { viewModel.onAuthModeChange(com.seina.chan.data.model.AuthMode.TOKEN) },
@@ -159,7 +157,6 @@ fun ConnectScreen(
                     Text("Token 直连", style = TextStyles.bodySm)
                 }
 
-                // OAUTH 模式按钮
                 val oauthSelected = isOauth
                 OutlinedButton(
                     onClick = { viewModel.onAuthModeChange(com.seina.chan.data.model.AuthMode.OAUTH) },
@@ -181,7 +178,6 @@ fun ConnectScreen(
 
             Spacer(modifier = Modifier.height(Spacing.md))
 
-            // 用户名输入框（仅 OAUTH 模式）
             if (isOauth) {
                 OutlinedTextField(
                     value = uiState.username,
@@ -197,7 +193,6 @@ fun ConnectScreen(
                 Spacer(modifier = Modifier.height(Spacing.md))
             }
 
-            // Token / 密码输入框
             OutlinedTextField(
                 value = uiState.token,
                 onValueChange = viewModel::onTokenChange,
@@ -460,7 +455,6 @@ fun ConnectScreen(
                         colors = outlinedTextFieldColors()
                     )
                     Spacer(modifier = Modifier.height(Spacing.sm))
-                    // 编辑对话框：认证模式选择
                     val isEditOauth = editAuthMode == com.seina.chan.data.model.AuthMode.OAUTH
                     Row(
                         modifier = Modifier.fillMaxWidth(),

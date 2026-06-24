@@ -134,15 +134,6 @@ class HermesConnectionService : Service() {
             }
             manager.createNotificationChannel(keepAliveChannel)
 
-            val aiChannel = NotificationChannel(
-                CHANNEL_ID_AI_MESSAGES,
-                "AI 消息提醒",
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "当 AI 助手返回新消息时提醒"
-            }
-            manager.createNotificationChannel(aiChannel)
-
             val eventsChannel = NotificationChannel(
                 CHANNEL_ID_EVENTS,
                 "消息通知",
@@ -151,6 +142,7 @@ class HermesConnectionService : Service() {
                 description = "Hermes 事件通知"
             }
             manager.createNotificationChannel(eventsChannel)
+
         }
     }
 
@@ -174,7 +166,7 @@ class HermesConnectionService : Service() {
             .build()
 
         val manager = getSystemService(NotificationManager::class.java)
-        manager?.notify(NOTIFICATION_ID_EVENTS, notification)
+        manager?.notify(eventType.hashCode(), notification)
     }
 
     private fun buildKeepAliveNotification(): android.app.Notification {
@@ -204,10 +196,7 @@ class HermesConnectionService : Service() {
     companion object {
         private const val CHANNEL_ID_KEEPALIVE = "keepalive"
         private const val NOTIFICATION_ID_KEEPALIVE = 1
-        private const val CHANNEL_ID_AI_MESSAGES = "ai_messages"
-        private const val NOTIFICATION_ID_MESSAGE = 2
         private const val CHANNEL_ID_EVENTS = "hermes_events"
-        private const val NOTIFICATION_ID_EVENTS = 3
 
         const val ACTION_APP_FOREGROUND = "APP_FOREGROUND"
         const val ACTION_APP_BACKGROUND = "APP_BACKGROUND"

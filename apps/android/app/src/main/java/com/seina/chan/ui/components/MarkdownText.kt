@@ -51,7 +51,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 
-// === Markdown 解析数据模型 ===
 
 private sealed class MarkdownSegment {
     data class CodeBlock(val language: String, val code: String) : MarkdownSegment()
@@ -71,12 +70,10 @@ private sealed class InlineSpan {
     data class Link(val text: String, val url: String) : InlineSpan()
 }
 
-// === 正则 ===
 
 private val codeBlockPattern = Regex("""```([a-zA-Z0-9+-_]*)[ \t]*\n([\s\S]*?)```""")
 private val linkPattern = Regex("""\[([^\]]+)\]\(([^)]+)\)""")
 
-// === 解析器 ===
 
 private fun parseMarkdown(content: String): List<MarkdownSegment> {
     val segments = mutableListOf<MarkdownSegment>()
@@ -316,7 +313,6 @@ private fun parseInlineSpans(text: String): List<InlineSpan> {
     return spans
 }
 
-// === 渲染组件 ===
 
 private object CodeHighlighter {
     private val keywords = setOf(

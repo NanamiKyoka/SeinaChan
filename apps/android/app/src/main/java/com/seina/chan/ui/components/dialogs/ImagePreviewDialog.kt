@@ -75,7 +75,6 @@ fun ImagePreviewDialog(
                             scale = newScale
 
                             if (newScale > 1f) {
-                                // 拖拽偏移累加
                                 offset = Offset(
                                     x = offset.x + pan.x,
                                     y = offset.y + pan.y
@@ -96,11 +95,9 @@ fun ImagePreviewDialog(
                         detectTapGestures(
                             onDoubleTap = { tapOffset ->
                                 if (scale > 1.5f) {
-                                    // 已放大 → 恢复原始大小
                                     scale = 1f
                                     offset = Offset.Zero
                                 } else {
-                                    // 放大到 3x，以双击点为中心
                                     scale = 3f
                                     val center = Offset(
                                         size.width / 2f,
@@ -120,7 +117,6 @@ fun ImagePreviewDialog(
                 contentScale = ContentScale.Fit
             )
 
-            // 关闭按钮
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier
