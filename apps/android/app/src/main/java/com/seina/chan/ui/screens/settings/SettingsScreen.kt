@@ -32,6 +32,9 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import com.seina.chan.data.model.BUILTIN_THEMES
+import com.seina.chan.data.model.FontPreset
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -212,6 +215,64 @@ fun SettingsScreen(
                         optionValues = listOf("system", "light", "dark"),
                         icon = Icons.Filled.DarkMode,
                         onOptionSelected = { viewModel.setThemeMode(it) }
+                    )
+                    val currentTheme = BUILTIN_THEMES.find { it.id == uiState.activeThemeId }
+                    var showThemePicker by remember { mutableStateOf(false) }
+                    ClickableSettingItem(
+                        title = "颜色主题",
+                        description = currentTheme?.name ?: uiState.activeThemeId,
+                        onClick = { showThemePicker = true },
+                        icon = Icons.Filled.Palette
+                    )
+                    if (showThemePicker) {
+                        AlertDialog(
+                            onDismissRequest = { showThemePicker = false },
+                            title = { Text("选择颜色主题") },
+                            text = {
+                                Column {
+                                    BUILTIN_THEMES.forEach { theme ->
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    viewModel.setActiveThemeId(theme.id)
+                                                    showThemePicker = false
+                                                }
+                                                .padding(vertical = 4.dp)
+                                        ) {
+                                            RadioButton(
+                                                selected = theme.id == uiState.activeThemeId,
+                                                onClick = {
+                                                    viewModel.setActiveThemeId(theme.id)
+                                                    showThemePicker = false
+                                                }
+                                            )
+                                            Text(
+                                                text = theme.name,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onBackground,
+                                                modifier = Modifier.padding(start = Spacing.sm)
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showThemePicker = false }) {
+                                    Text("关闭")
+                                }
+                            }
+                        )
+                    }
+                    DropdownSettingItem(
+                        title = "字体组合",
+                        description = "界面使用的字体风格",
+                        value = FontPreset.entries.find { it.id == uiState.fontPresetId }?.displayName ?: uiState.fontPresetId,
+                        options = FontPreset.entries.map { it.displayName },
+                        optionValues = FontPreset.entries.map { it.id },
+                        icon = Icons.Filled.ExpandMore,
+                        onOptionSelected = { viewModel.setFontPresetId(it) }
                     )
                 }
             }

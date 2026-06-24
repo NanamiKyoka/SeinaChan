@@ -18,7 +18,8 @@ import kotlinx.serialization.serializer
 class SettingsRepository(
     private val dataStore: DataStore<Preferences>
 ) {
-
+    val activeThemeId: Flow<String> = dataStore.data.map { it[ACTIVE_THEME_ID_KEY] ?: DEFAULT_THEME_ID }
+    val fontPresetId: Flow<String> = dataStore.data.map { it[FONT_PRESET_KEY] ?: "serif-sans" }
     val pageSize: Flow<Int> = dataStore.data.map { it[PAGE_SIZE_KEY] ?: 20 }
     val showToolCalls: Flow<Boolean> = dataStore.data.map { it[SHOW_TOOL_CALLS_KEY] ?: true }
     val showReasoning: Flow<Boolean> = dataStore.data.map { it[SHOW_REASONING_KEY] ?: true }
@@ -138,6 +139,15 @@ class SettingsRepository(
         safeEdit { prefs -> prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(decodeProfiles(prefs).filter { it.id != profileId }) }
     }
 
+    suspend fun setActiveThemeId(value: String) {
+        safeEdit { prefs -> prefs[ACTIVE_THEME_ID_KEY] = value }
+    }
+
+    suspend fun setFontPresetId(value: String) {
+        safeEdit { prefs -> prefs[FONT_PRESET_KEY] = value }
+    }
+
+
     companion object {
         private val PAGE_SIZE_KEY = intPreferencesKey("page_size")
         private val SHOW_TOOL_CALLS_KEY = booleanPreferencesKey("show_tool_calls")
@@ -153,5 +163,7 @@ class SettingsRepository(
         private val CUSTOM_TOOLS_KEY = stringSetPreferencesKey("custom_tools")
         private val CONNECTION_PROFILES_KEY = stringPreferencesKey("connection_profiles")
         private val SELECTED_MODEL_KEY = stringPreferencesKey("selected_model")
+        private val ACTIVE_THEME_ID_KEY = stringPreferencesKey("active_theme_id")
+        private val FONT_PRESET_KEY = stringPreferencesKey("font_preset")
     }
 }

@@ -6,6 +6,7 @@ import com.seina.chan.data.model.ConnectionConfig
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.data.remote.HermesMethods
 import com.seina.chan.data.model.ConnectionProfile
+import com.seina.chan.data.model.DEFAULT_THEME_ID
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SettingsRepository
 import com.seina.chan.util.FileLogger
@@ -51,7 +52,11 @@ data class SettingsUiState(
     val modelError: String? = null,
     /** 工具列表 */
     val tools: List<SettingsViewModel.ToolInfo> = emptyList(),
-    val toolsError: String? = null
+    val toolsError: String? = null,
+    /** 当前激活的主题 ID */
+    val activeThemeId: String = DEFAULT_THEME_ID,
+    /** 当前字体预设 ID */
+    val fontPresetId: String = "serif-sans",
 )
 
 @HiltViewModel
@@ -133,6 +138,16 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.selectedModel.collect { value ->
                 _uiState.update { it.copy(selectedModel = value) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.activeThemeId.collect { value ->
+                _uiState.update { it.copy(activeThemeId = value) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.fontPresetId.collect { value ->
+                _uiState.update { it.copy(fontPresetId = value) }
             }
         }
     }
@@ -360,6 +375,18 @@ class SettingsViewModel @Inject constructor(
         setConnectionToken(token)
         viewModelScope.launch {
             connectionRepository.connect(ConnectionConfig(ip, port, token))
+        }
+    }
+
+    fun setActiveThemeId(value: String) {
+        viewModelScope.launch {
+            settingsRepository.setActiveThemeId(value)
+        }
+    }
+
+    fun setFontPresetId(value: String) {
+        viewModelScope.launch {
+            settingsRepository.setFontPresetId(value)
         }
     }
 

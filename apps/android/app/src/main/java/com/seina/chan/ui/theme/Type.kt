@@ -111,3 +111,33 @@ val SeinaChanTypography = Typography(
     labelSmall = TextStyles.caption,
     labelMedium = TextStyles.label,
 )
+
+/**
+ * 根据字体预设 ID 选择对应的 Typography。
+ * - "serif-sans": 默认，展示用衬线 (Cormorant Garamond) + 正文无衬线 (Inter)
+ * - "sans": 纯无衬线 (Inter)
+ * - "system": 系统字体
+ */
+fun typographyForPreset(presetId: String): Typography {
+    val display = when (presetId) {
+        "serif-sans" -> FontFamily.Serif
+        "sans" -> FontFamily.SansSerif
+        else -> FontFamily.SansSerif
+    }
+    val body = when (presetId) {
+        "serif-sans" -> FontFamily.SansSerif
+        "sans" -> FontFamily.SansSerif
+        else -> FontFamily.SansSerif
+    }
+    return Typography(
+        displayLarge = TextStyles.displayXl.copy(fontFamily = display),
+        displayMedium = TextStyles.displayLg.copy(fontFamily = display),
+        displaySmall = TextStyles.displayMd.copy(fontFamily = display),
+        headlineLarge = TextStyles.displaySm.copy(fontFamily = display),
+        bodyLarge = TextStyles.bodyLg.copy(fontFamily = body),
+        bodyMedium = TextStyles.bodyMd.copy(fontFamily = body),
+        bodySmall = TextStyles.bodySm.copy(fontFamily = body),
+        labelSmall = TextStyles.caption.copy(fontFamily = body),
+        labelMedium = TextStyles.label.copy(fontFamily = body),
+    )
+}
