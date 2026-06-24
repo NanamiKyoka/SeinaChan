@@ -27,7 +27,6 @@ import androidx.navigation.compose.rememberNavController
 import com.seina.chan.data.repository.SettingsRepository
 import com.seina.chan.data.model.BUILTIN_THEMES
 import com.seina.chan.data.model.ThemeConfig
-import com.seina.chan.data.model.CUSTOM_THEME_ID
 import com.seina.chan.service.HermesConnectionService
 import com.seina.chan.ui.components.SeinaSnackbarHost
 import com.seina.chan.ui.navigation.SeinaNavHost
@@ -68,23 +67,13 @@ class MainActivity : ComponentActivity() {
             val themeMode by settingsRepository.themeMode.collectAsStateWithLifecycle(initialValue = "system")
             val activeThemeId by settingsRepository.activeThemeId.collectAsStateWithLifecycle(initialValue = "warm-sun")
             val fontPresetId by settingsRepository.fontPresetId.collectAsStateWithLifecycle(initialValue = "serif-sans")
-            val customThemeColors by settingsRepository.customThemeColors.collectAsStateWithLifecycle(initialValue = null)
             val darkTheme = when (themeMode) {
                 "light" -> false
                 "dark" -> true
                 else -> isSystemInDarkTheme()
             }
-            val themeConfig = remember(activeThemeId, customThemeColors) {
-                if (activeThemeId == CUSTOM_THEME_ID && customThemeColors != null) {
-                    ThemeConfig(
-                        id = CUSTOM_THEME_ID,
-                        name = "自定义",
-                        isBuiltin = false,
-                        customColors = customThemeColors
-                    )
-                } else {
-                    BUILTIN_THEMES.find { it.id == activeThemeId }
-                }
+            val themeConfig = remember(activeThemeId) {
+                BUILTIN_THEMES.find { it.id == activeThemeId }
             }
             SeinaChanTheme(
                 darkTheme = darkTheme,

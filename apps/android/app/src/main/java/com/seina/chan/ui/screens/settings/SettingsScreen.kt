@@ -82,7 +82,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import com.seina.chan.data.model.CUSTOM_THEME_ID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -227,11 +226,8 @@ fun SettingsScreen(
                         icon = Icons.Filled.DarkMode,
                         onOptionSelected = { viewModel.setThemeMode(it) }
                     )
-                    val currentTheme = if (uiState.activeThemeId == CUSTOM_THEME_ID) "自定义主题" else BUILTIN_THEMES.find { it.id == uiState.activeThemeId }?.name
+                    val currentTheme = BUILTIN_THEMES.find { it.id == uiState.activeThemeId }?.name
                     var showThemePicker by remember { mutableStateOf(false) }
-                    var showCustomThemeDialog by remember { mutableStateOf(false) }
-                    var customPrimaryColor by remember { mutableStateOf(0xFFCC785C) }
-                    var customBackgroundColor by remember { mutableStateOf(0xFFFAF9F5) }
                     ClickableSettingItem(
                         title = "颜色主题",
                         description = currentTheme ?: uiState.activeThemeId,
@@ -270,73 +266,11 @@ fun SettingsScreen(
                                             )
                                         }
                                     }
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                showThemePicker = false
-                                                showCustomThemeDialog = true
-                                            }
-                                            .padding(vertical = 4.dp)
-                                    ) {
-                                        RadioButton(
-                                            selected = uiState.activeThemeId == CUSTOM_THEME_ID,
-                                            onClick = {
-                                                showThemePicker = false
-                                                showCustomThemeDialog = true
-                                            }
-                                        )
-                                        Text(
-                                            text = "自定义主题",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onBackground,
-                                            modifier = Modifier.padding(start = Spacing.sm)
-                                        )
-                                    }
                                 }
                             },
                             confirmButton = {
                                 TextButton(onClick = { showThemePicker = false }) {
                                     Text("关闭")
-                                }
-                            }
-                        )
-                    }
-                    if (showCustomThemeDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showCustomThemeDialog = false },
-                            title = { Text("自定义主题") },
-                            text = {
-                                Column {
-                                    Text("主色", style = MaterialTheme.typography.titleSmall)
-                                    Spacer(modifier = Modifier.height(Spacing.sm))
-                                    ColorSwatchGrid(
-                                        swatches = PRIMARY_COLOR_SWATCHES,
-                                        selectedColor = customPrimaryColor,
-                                        onColorSelected = { customPrimaryColor = it }
-                                    )
-                                    Spacer(modifier = Modifier.height(Spacing.md))
-                                    Text("背景色", style = MaterialTheme.typography.titleSmall)
-                                    Spacer(modifier = Modifier.height(Spacing.sm))
-                                    ColorSwatchGrid(
-                                        swatches = BACKGROUND_COLOR_SWATCHES,
-                                        selectedColor = customBackgroundColor,
-                                        onColorSelected = { customBackgroundColor = it }
-                                    )
-                                }
-                            },
-                            confirmButton = {
-                                TextButton(onClick = {
-                                    viewModel.setCustomTheme(customPrimaryColor, customBackgroundColor)
-                                    showCustomThemeDialog = false
-                                }) {
-                                    Text("确认")
-                                }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showCustomThemeDialog = false }) {
-                                    Text("取消")
                                 }
                             }
                         )
@@ -1280,64 +1214,3 @@ private fun DropdownSettingItem(
     }
 }
 
-// ── 自定义主题色板 ──
-
-private val PRIMARY_COLOR_SWATCHES: List<Long> = listOf(
-    0xFFCC785C, // 暖阳珊瑚
-    0xFF7B2D8E, // 星奈紫
-    0xFF5B6ABF, // 夜曲蓝
-    0xFF2D8E7B, // 极光青
-    0xFFAD6B9E, // 胧月粉
-    0xFFE8916A, // 晨曦橙
-    0xFFD4380D, // 朱红
-    0xFF1A8C4A, // 翠绿
-    0xFF096DD9, // 湛蓝
-    0xFF8B5CF6, // 紫罗兰
-)
-
-private val BACKGROUND_COLOR_SWATCHES: List<Long> = listOf(
-    0xFFFAF9F5, // 暖白
-    0xFFF8F4FA, // 淡紫
-    0xFFF0EEF2, // 淡灰
-    0xFFFEFCF8, // 淡黄
-    0xFFF4FAF8, // 淡青
-    0xFFFDF8FA, // 淡粉
-    0xFFFFFFFF, // 纯白
-    0xFFF5F0EC, // 米白
-    0xFFF2F0F5, // 淡蓝灰
-    0xFFE8F0E8, // 淡绿
-)
-
-@Composable
-private fun ColorSwatchGrid(
-    swatches: List<Long>,
-    selectedColor: Long,
-    onColorSelected: (Long) -> Unit
-) {
-    Column {
-        swatches.chunked(5).forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                row.forEach { color ->
-                    val isSelected = color == selectedColor
-                    val borderModifier = if (isSelected) {
-                        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, AppShapes.sm)
-                    } else {
-                        Modifier
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(AppShapes.sm)
-                            .background(Color(color))
-                            .then(borderModifier)
-                            .clickable { onColorSelected(color) }
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-    }
-}

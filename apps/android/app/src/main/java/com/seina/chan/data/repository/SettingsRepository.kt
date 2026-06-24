@@ -51,15 +51,6 @@ class SettingsRepository(
         }
     }
 
-    /** 自定义主题颜色映射 */
-    val customThemeColors: Flow<Map<String, Long>?> = dataStore.data.map { prefs ->
-        val jsonStr = prefs[CUSTOM_THEME_COLORS_KEY] ?: return@map null
-        try {
-            json.decodeFromString(serializer<Map<String, Long>>(), jsonStr)
-        } catch (e: Exception) {
-            null
-        }
-    }
 
     private fun decodeProfiles(prefs: Preferences): List<ConnectionProfile> {
         return try {
@@ -169,11 +160,6 @@ class SettingsRepository(
         safeEdit { prefs -> prefs[FONT_PRESET_KEY] = value }
     }
 
-    suspend fun setCustomThemeColors(colors: Map<String, Long>) {
-        safeEdit { prefs ->
-            prefs[CUSTOM_THEME_COLORS_KEY] = json.encodeToString(serializer<Map<String, Long>>(), colors)
-        }
-    }
 
 
     companion object {
@@ -194,7 +180,6 @@ class SettingsRepository(
         private val CONNECTION_PROFILES_KEY = stringPreferencesKey("connection_profiles")
         private val SELECTED_MODEL_KEY = stringPreferencesKey("selected_model")
         private val ACTIVE_THEME_ID_KEY = stringPreferencesKey("active_theme_id")
-        private val CUSTOM_THEME_COLORS_KEY = stringPreferencesKey("custom_theme_colors")
         private val FONT_PRESET_KEY = stringPreferencesKey("font_preset")
     }
 }

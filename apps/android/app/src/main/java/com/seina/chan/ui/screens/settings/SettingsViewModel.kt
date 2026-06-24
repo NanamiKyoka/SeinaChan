@@ -8,7 +8,6 @@ import com.seina.chan.data.model.AuthMode
 import com.seina.chan.data.remote.HermesMethods
 import com.seina.chan.data.model.ConnectionProfile
 import com.seina.chan.data.model.DEFAULT_THEME_ID
-import com.seina.chan.data.model.CUSTOM_THEME_ID
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SettingsRepository
 import com.seina.chan.util.FileLogger
@@ -62,7 +61,6 @@ data class SettingsUiState(
     /** 当前字体预设 ID */
     val fontPresetId: String = "serif-sans",
     /** 自定义主题的颜色映射 */
-    val customThemeColors: Map<String, Long>? = null,
 )
 
 @HiltViewModel
@@ -165,11 +163,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.fontPresetId.collect { value ->
                 _uiState.update { it.copy(fontPresetId = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.customThemeColors.collect { value ->
-                _uiState.update { it.copy(customThemeColors = value) }
             }
         }
     }
@@ -425,16 +418,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun setCustomTheme(primaryArgb: Long, backgroundArgb: Long) {
-        viewModelScope.launch {
-            val colors = mapOf(
-                "primary" to primaryArgb,
-                "background" to backgroundArgb,
-            )
-            settingsRepository.setCustomThemeColors(colors)
-            settingsRepository.setActiveThemeId(CUSTOM_THEME_ID)
-        }
-    }
 
     fun loadProfile(profile: ConnectionProfile) {
         saveAndReconnect(profile.ip, profile.port, profile.token, profile.username, profile.authMode)

@@ -17,10 +17,9 @@ data class ThemeConfig(
     val isBuiltin: Boolean = false,
     val lightColors: Map<String, Long> = emptyMap(),
     val darkColors: Map<String, Long> = emptyMap(),
-    val customColors: Map<String, Long>? = null,
 ) {
     fun toColorScheme(isDark: Boolean): ColorScheme {
-        val c = if (!isBuiltin && customColors != null) customColors else if (isDark) darkColors else lightColors
+        val c = if (isDark) darkColors else lightColors
         val base = if (isDark) DARK_BASE else LIGHT_BASE
         return base.copy(
             primary = c.getColorOr("primary", base.primary),
