@@ -109,6 +109,7 @@ class ChatViewModel @Inject constructor(
                         val (sid, messages) = sessionRepository.resumeSession(currentDbSessionId)
                         currentWsSessionId = sid
                         rpcResumeMessages = currentDbSessionId to messages
+                        chatRepository.finalizeAllStreamingMessages()
                         FileLogger.i("ChatViewModel", "Auto-resume after reconnect succeeded, sid=$sid")
                     } catch (e: Exception) {
                         FileLogger.w("ChatViewModel", "Auto-resume after reconnect failed: ${e.message}")
@@ -126,6 +127,7 @@ class ChatViewModel @Inject constructor(
                     val (sid, messages) = sessionRepository.resumeSession(currentDbSessionId)
                     currentWsSessionId = sid
                     rpcResumeMessages = currentDbSessionId to messages
+                    chatRepository.finalizeAllStreamingMessages()
                     FileLogger.i("ChatViewModel", "Immediate resume after recreation succeeded, sid=$sid")
                 } catch (e: Exception) {
                     FileLogger.w("ChatViewModel", "Immediate resume after recreation failed: ${e.message}")
@@ -622,6 +624,7 @@ class ChatViewModel @Inject constructor(
                 val history = sessionRepository.fetchMessages(sid)
                 FileLogger.i("ChatViewModel", "loadMessages() fetched ${history.size} messages from server (sid=$sid, dbSessionId=$dbSessionId)")
                 val finalMessages = history
+                chatRepository.finalizeAllStreamingMessages()
                 chatRepository.setMessages(finalMessages)
                 rpcResumeMessages = null
                 _inputState.update { it.copy(isLoading = false, error = null) }

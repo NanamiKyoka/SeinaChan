@@ -94,9 +94,9 @@ class HermesWsClient(
     private var lastFrameTime = 0L
     private var heartbeatWatchJob: Job? = null
 
-    private var currentHeartbeatTimeoutMs = 45_000L
-    private val baseHeartbeatTimeoutMs = 45_000L
-    private val longRunningHeartbeatTimeoutMs = 120_000L
+    private var currentHeartbeatTimeoutMs = 180_000L
+    private val baseHeartbeatTimeoutMs = 180_000L
+    private val longRunningHeartbeatTimeoutMs = 600_000L
 
     fun setLongRunningMode(enabled: Boolean) {
         currentHeartbeatTimeoutMs = if (enabled) longRunningHeartbeatTimeoutMs else baseHeartbeatTimeoutMs

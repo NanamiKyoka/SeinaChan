@@ -618,6 +618,21 @@ class ChatRepository(
         return msg.copy(toolCalls = finalized)
     }
 
+    /**
+     * 将所有流式消息标记为完成，清除思考/流式状态。
+     * 用于重连后或加载消息前，确保 UI 不会卡在 "思考中" 状态。
+     */
+    fun finalizeAllStreamingMessages() {
+        _messages.value = _messages.value.map { msg ->
+            if (msg.isStreaming && msg.role == "assistant") {
+                finalizeToolCallsInMessage(
+                    msg.copy(isStreaming = false, isReasoning = false)
+                )
+            } else msg
+        }
+        persistMessages()
+    }
+
     // ==================== 持久化相关 ====================
 
     private fun persistMessage(message: ChatMessage) {

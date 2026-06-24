@@ -46,11 +46,13 @@ object AppModule {
     @Singleton
     @Named("ws")
     fun provideHttpClient(): HttpClient = HttpClient(CIO) {
-        install(WebSockets)
+        install(WebSockets) {
+            pingIntervalMillis = 15_000  // 每 15s 发送 ping，保活 socket
+        }
         install(HttpTimeout) {
             requestTimeoutMillis = 30_000
             connectTimeoutMillis = 30_000
-            socketTimeoutMillis = 30_000
+            socketTimeoutMillis = 300_000  // 5 分钟，防止后台短暂挂起导致 socket 超时
         }
     }
     @Provides

@@ -43,6 +43,7 @@ class HermesConnectionService : Service() {
     // 协程 Job 引用，用于防止重复启动
     private var stateCollectJob: Job? = null
     private var eventsCollectJob: Job? = null
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
 
     inner class LocalBinder : Binder() {
         fun getService(): HermesConnectionService = this@HermesConnectionService
@@ -54,6 +55,15 @@ class HermesConnectionService : Service() {
         createNotificationChannels()
         startForeground(NOTIFICATION_ID_KEEPALIVE, buildKeepAliveNotification())
         startCollectors()
+        // 获取 Partial WakeLock 防止 CPU 休眠导致 WebSocket 断连
+        val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        wakeLock = powerManager.newWakeLock(
+            android.os.PowerManager.PARTIAL_WAKE_LOCK,
+            "SeinaChan:WebSocket"
+        ).apply {
+            setReferenceCounted(false)
+            acquire()
+        }
     }
 
     override fun onBind(intent: Intent): IBinder = binder
@@ -143,6 +153,9 @@ class HermesConnectionService : Service() {
             }
             manager.createNotificationChannel(eventsChannel)
 
+            // 清理旧版本残留的 "AI 消息提醒" 通道（commit e2e0389 删除了创建代码但 Android 不会自动删除）
+            manager.deleteNotificationChannel("ai_messages")
+
         }
     }
 
@@ -187,10 +200,14 @@ class HermesConnectionService : Service() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
         FileLogger.i("HermesConnectionService", "onDestroy")
+        wakeLock?.let {
+            if (it.isHeld) it.release()
+            wakeLock = null
+        }
         stateCollectJob?.cancel()
         eventsCollectJob?.cancel()
+        super.onDestroy()
     }
 
     companion object {
