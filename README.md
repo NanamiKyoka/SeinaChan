@@ -1,5 +1,7 @@
 # 口袋星奈 (Seina Chan)
 
+![Seina Chan](apps/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png)
+
 ---
 
 ## 这啥？
