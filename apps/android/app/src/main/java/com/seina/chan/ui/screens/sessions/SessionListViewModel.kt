@@ -80,6 +80,7 @@ class SessionListViewModel @Inject constructor(
 
     private var offset = 0
     private var limit = 20
+    private var loadingAll = false
 
     init {
         viewModelScope.launch {
@@ -156,23 +157,16 @@ class SessionListViewModel @Inject constructor(
     }
 
     private fun loadAllSessions() {
+        if (loadingAll) return
+        loadingAll = true
         viewModelScope.launch {
-            val knownIds = mutableSetOf<String>()
-            var currentOffset = 0
-            var more = true
-            while (more) {
-                try {
-                    val result = sessionRepository.fetchSessions(limit = limit, offset = currentOffset, knownIds = knownIds)
-                    val newSessions = result.sessions.filter { knownIds.add(it.id) }
-                    if (newSessions.isNotEmpty()) {
-                        _sessions.value = _sessions.value + newSessions
-                    }
-                    more = result.hasMore
-                    currentOffset += limit
-                } catch (e: Exception) {
-                    FileLogger.e("SessionListViewModel", "loadAllSessions() failed at offset=$currentOffset", e)
-                    break
-                }
+            try {
+                val result = sessionRepository.fetchSessions(limit = 500, offset = 0)
+                _sessions.value = result.sessions
+            } catch (e: Exception) {
+                FileLogger.e("SessionListViewModel", "loadAllSessions() failed", e)
+            } finally {
+                loadingAll = false
             }
         }
     }
