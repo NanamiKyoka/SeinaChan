@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.seina.chan.data.model.ConnectionProfile
+import com.seina.chan.data.model.DEFAULT_THEME_ID
 import com.seina.chan.util.FileLogger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map

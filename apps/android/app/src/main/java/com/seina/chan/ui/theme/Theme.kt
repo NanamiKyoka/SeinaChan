@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import com.seina.chan.data.model.ThemeConfig
 
+@Composable
 fun SeinaChanTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     themeConfig: ThemeConfig? = null,
