@@ -155,15 +155,23 @@ class SessionListViewModel @Inject constructor(
             }
         }
     }
+    private var loadingAll = false
     private fun loadAllSessions() {
+        if (loadingAll) return
+        loadingAll = true
         viewModelScope.launch {
-            _sessions.value = emptyList() // 清空，防止追加重复
+            val seenIds = mutableSetOf<String>()
             var currentOffset = 0
             var more = true
             while (more) {
                 try {
                     val result = sessionRepository.fetchSessions(limit = limit, offset = currentOffset)
-                    _sessions.value = _sessions.value + result.sessions
+                    // 去重：服务端可能忽略 offset 重复返回首页，检测到重复即停止
+                    val newSessions = result.sessions.filter { seenIds.add(it.id) }
+                    if (newSessions.isEmpty()) break
+                    // 追加时去重（保留首次出现的顺序）
+                    val deduped = (_sessions.value + newSessions).distinctBy { it.id }
+                    _sessions.value = deduped
                     more = result.hasMore
                     currentOffset += limit
                 } catch (e: Exception) {
@@ -171,6 +179,7 @@ class SessionListViewModel @Inject constructor(
                     break
                 }
             }
+            loadingAll = false
         }
     }
     fun refresh() {
