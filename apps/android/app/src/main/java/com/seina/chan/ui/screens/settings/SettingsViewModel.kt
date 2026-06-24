@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.seina.chan.data.model.ConnectionConfig
 import com.seina.chan.data.remote.HermesWsClient
+import com.seina.chan.data.model.AuthMode
 import com.seina.chan.data.remote.HermesMethods
 import com.seina.chan.data.model.ConnectionProfile
 import com.seina.chan.data.model.DEFAULT_THEME_ID
@@ -368,13 +369,12 @@ class SettingsViewModel @Inject constructor(
             connectionRepository.disconnect()
         }
     }
-
-    fun saveAndReconnect(ip: String, port: String, token: String) {
+    fun saveAndReconnect(ip: String, port: String, token: String, username: String = "", authMode: AuthMode = AuthMode.TOKEN) {
         setConnectionIp(ip)
         setConnectionPort(port)
         setConnectionToken(token)
         viewModelScope.launch {
-            connectionRepository.connect(ConnectionConfig(ip, port, token))
+            connectionRepository.connect(ConnectionConfig(ip, port, token, username, authMode))
         }
     }
 
@@ -391,6 +391,6 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun loadProfile(profile: ConnectionProfile) {
-        saveAndReconnect(profile.ip, profile.port, profile.token)
+        saveAndReconnect(profile.ip, profile.port, profile.token, profile.username, profile.authMode)
     }
 }

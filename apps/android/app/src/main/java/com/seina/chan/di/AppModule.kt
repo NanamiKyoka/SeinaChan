@@ -15,6 +15,7 @@ import com.seina.chan.data.repository.ChatRepository
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SessionRepository
 import com.seina.chan.data.repository.SettingsRepository
+import com.seina.chan.data.repository.AuthRepository
 import com.seina.chan.util.NetworkMonitor
 import dagger.Module
 import dagger.Provides
@@ -22,11 +23,14 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.cookies.AcceptAllCookiesStorage
+import io.ktor.client.plugins.cookies.HttpCookies
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.websocket.WebSockets
 import kotlinx.serialization.json.Json
 import javax.inject.Singleton
+import javax.inject.Named
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -38,9 +42,9 @@ object AppModule {
         ignoreUnknownKeys = true
         isLenient = true
     }
-
     @Provides
     @Singleton
+    @Named("ws")
     fun provideHttpClient(): HttpClient = HttpClient(CIO) {
         install(WebSockets)
         install(HttpTimeout) {
@@ -49,6 +53,19 @@ object AppModule {
             socketTimeoutMillis = 30_000
         }
     }
+    @Provides
+    @Singleton
+    @Named("api")
+    fun provideApiHttpClient(): HttpClient = HttpClient(CIO) {
+        install(HttpCookies) {
+            storage = AcceptAllCookiesStorage()
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 30_000
+            connectTimeoutMillis = 30_000
+        }
+    }
+
 
     @Provides
     @Singleton
@@ -60,17 +77,24 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideHermesWsClient(client: HttpClient, json: Json, networkMonitor: NetworkMonitor): HermesWsClient {
+    fun provideHermesWsClient(@Named("ws") client: HttpClient, json: Json, networkMonitor: NetworkMonitor): HermesWsClient {
         return HermesWsClient(client, json, networkMonitor)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAuthRepository(@Named("api") apiHttpClient: HttpClient, json: Json): AuthRepository {
+        return AuthRepository(apiHttpClient, json)
     }
 
     @Provides
     @Singleton
     fun provideConnectionRepository(
         wsClient: HermesWsClient,
-        dataStore: DataStore<Preferences>
+        dataStore: DataStore<Preferences>,
+        authRepository: AuthRepository
     ): ConnectionRepository {
-        return ConnectionRepository(wsClient, dataStore)
+        return ConnectionRepository(wsClient, dataStore, authRepository)
     }
 
     @Provides

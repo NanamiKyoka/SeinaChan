@@ -87,7 +87,8 @@ class HermesWsClient(
     private var reconnectAttempts = 0
     private var reconnectJob: Job? = null
     private var lastUrl: String? = null
-    private var lastToken: String? = null
+    /** 重连时可调用来获取最新的 WS URL（例如 OAUTH 模式下重新登录+换 ticket） */
+    private var urlProvider: (suspend () -> String?)? = null
 
     /** 上次收到帧的时间戳，用于心跳超时检测 */
     private var lastFrameTime = 0L
@@ -146,26 +147,23 @@ class HermesWsClient(
             reconnectJob = null
         }
     }
-
-    suspend fun connect(url: String, token: String): Boolean {
+    suspend fun connect(fullWsUrl: String, urlProvider: (suspend () -> String?)? = null): Boolean {
         connectLock.withLock {
             if (_state.value == ConnectionState.Open || _state.value == ConnectionState.Connecting) {
                 FileLogger.i("HermesWsClient", "Already connected or connecting, state=${_state.value}")
                 return true
             }
-            lastUrl = url
-            lastToken = token
-            return doConnect(url, token)
+            lastUrl = fullWsUrl
+            this.urlProvider = urlProvider
+            return doConnect(fullWsUrl)
         }
     }
 
-    private suspend fun doConnect(url: String, token: String): Boolean {
+    private suspend fun doConnect(url: String): Boolean {
         _state.value = ConnectionState.Connecting
         FileLogger.i("HermesWsClient", "doConnect() starting, url=$url")
         return try {
-            // 通过 URL 参数传递 token（Hermes 服务端只认 query params）
-            val wsUrl = if (url.contains("?")) "$url&token=$token" else "$url?token=$token"
-            val newSession = client.webSocketSession(wsUrl)
+            val newSession = client.webSocketSession(url)
             session = newSession
             _state.value = ConnectionState.Open
             reconnectAttempts = 0
@@ -232,9 +230,9 @@ class HermesWsClient(
             FileLogger.i("HermesWsClient", "计划重连，第${reconnectAttempts + 1}次，延迟${delayMs}ms")
             delay(delayMs)
             reconnectAttempts++
-            val url = lastUrl ?: return@launch
-            val token = lastToken ?: return@launch
-            doConnect(url, token)
+            // 获取最新 URL：有 urlProvider 则调用获取（OAUTH 重连重新登录），否则用 lastUrl
+            val targetUrl = urlProvider?.invoke() ?: lastUrl ?: return@launch
+            doConnect(targetUrl)
         }
     }
 
@@ -253,13 +251,13 @@ class HermesWsClient(
                 reconnectJob?.cancel()
                 reconnectJob = null
                 reconnectAttempts = 0
-                val url = lastUrl
-                val token = lastToken
-                if (url == null || token == null) {
-                    FileLogger.w("HermesWsClient", "reconnectImmediately() 失败：缺少 url 或 token")
+                // 获取最新 URL：有 urlProvider 则调用获取（OAUTH 重连重新登录），否则用 lastUrl
+                val targetUrl = urlProvider?.invoke() ?: lastUrl
+                if (targetUrl == null) {
+                    FileLogger.w("HermesWsClient", "reconnectImmediately() 失败：缺少 url")
                     return@withLock
                 }
-                doConnect(url, token)
+                doConnect(targetUrl)
             }
         }
     }

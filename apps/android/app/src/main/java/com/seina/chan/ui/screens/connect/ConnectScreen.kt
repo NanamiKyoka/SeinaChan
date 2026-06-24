@@ -72,6 +72,7 @@ fun ConnectScreen(
     var editIp by remember { mutableStateOf("") }
     var editPort by remember { mutableStateOf("") }
     var editToken by remember { mutableStateOf("") }
+    var editUsername by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         viewModel.navigateToChat.collect { success ->
@@ -131,13 +132,29 @@ fun ConnectScreen(
                 colors = outlinedTextFieldColors()
             )
 
+
+            // 用户名输入框（OAUTH 模式）
+            if (uiState.authRequired == true) {
+                OutlinedTextField(
+                    value = uiState.username,
+                    onValueChange = viewModel::onUsernameChange,
+                    label = { Text("用户名") },
+                    placeholder = { Text("Hermes 登录用户名") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isLoading,
+                    singleLine = true,
+                    shape = AppShapes.md,
+                    colors = outlinedTextFieldColors()
+                )
+                Spacer(modifier = Modifier.height(Spacing.md))
+            }
             Spacer(modifier = Modifier.height(Spacing.md))
 
             OutlinedTextField(
                 value = uiState.token,
                 onValueChange = viewModel::onTokenChange,
-                label = { Text("Token (可选)") },
-                placeholder = { Text("留空则使用默认认证") },
+                label = { if (uiState.authRequired == true) Text("密码") else Text("Token (可选)") },
+                placeholder = { if (uiState.authRequired == true) Text("Hermes 登录密码") else Text("留空则使用默认认证") },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !uiState.isLoading,
                 singleLine = true,
@@ -251,6 +268,7 @@ fun ConnectScreen(
                             editIp = profile.ip
                             editPort = profile.port
                             editToken = profile.token
+                            editUsername = profile.username
                             showEditDialog = true
                         },
                         onRename = {
@@ -402,6 +420,16 @@ fun ConnectScreen(
                         shape = AppShapes.md,
                         colors = outlinedTextFieldColors()
                     )
+                    Spacer(modifier = Modifier.height(Spacing.sm))
+                    OutlinedTextField(
+                        value = editUsername,
+                        onValueChange = { editUsername = it },
+                        label = { Text("用户名") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = AppShapes.md,
+                        colors = outlinedTextFieldColors()
+                    )
                 }
             },
             confirmButton = {
@@ -412,7 +440,8 @@ fun ConnectScreen(
                                 profile.copy(
                                     ip = editIp.trim(),
                                     port = editPort.trim(),
-                                    token = editToken.trim()
+                                    token = editToken.trim(),
+                                    username = editUsername.trim()
                                 )
                             )
                         }

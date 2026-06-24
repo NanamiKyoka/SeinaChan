@@ -8,5 +8,7 @@ data class ConnectionProfile(
     val name: String,
     val ip: String,
     val port: String,
-    val token: String = ""
+    val token: String = "",
+    val username: String = "",
+    val authMode: AuthMode = AuthMode.TOKEN
 )
