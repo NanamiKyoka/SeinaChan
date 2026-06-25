@@ -16,6 +16,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.put
@@ -77,95 +79,76 @@ class SettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            settingsRepository.pageSize.collect { value ->
-                _uiState.update { it.copy(pageSize = value) }
-            }
+            combine(
+                settingsRepository.pageSize,
+                settingsRepository.showToolCalls,
+                settingsRepository.showReasoning,
+                settingsRepository.themeMode,
+                settingsRepository.showTimestamps
+            ) { pageSize, showToolCalls, showReasoning, themeMode, showTimestamps ->
+                _uiState.update { current ->
+                    current.copy(
+                        pageSize = pageSize,
+                        showToolCalls = showToolCalls,
+                        showReasoning = showReasoning,
+                        themeMode = themeMode,
+                        showTimestamps = showTimestamps
+                    )
+                }
+            }.collect {}
         }
         viewModelScope.launch {
-            settingsRepository.showToolCalls.collect { value ->
-                _uiState.update { it.copy(showToolCalls = value) }
-            }
+            combine(
+                settingsRepository.autoExpandReasoning,
+                settingsRepository.autoExpandTools,
+                settingsRepository.connectionIp,
+                settingsRepository.connectionPort,
+                settingsRepository.connectionToken
+            ) { autoExpandReasoning, autoExpandTools, connectionIp, connectionPort, connectionToken ->
+                _uiState.update { current ->
+                    current.copy(
+                        autoExpandReasoning = autoExpandReasoning,
+                        autoExpandTools = autoExpandTools,
+                        connectionIp = connectionIp,
+                        connectionPort = connectionPort,
+                        connectionToken = connectionToken
+                    )
+                }
+            }.collect {}
         }
         viewModelScope.launch {
-            settingsRepository.showReasoning.collect { value ->
-                _uiState.update { it.copy(showReasoning = value) }
-            }
+            combine(
+                settingsRepository.connectionUsername,
+                settingsRepository.connectionAuthMode,
+                settingsRepository.hiddenToolNames,
+                settingsRepository.customTools,
+                settingsRepository.selectedModel
+            ) { connectionUsername, connectionAuthMode, hiddenToolNames, customTools, selectedModel ->
+                _uiState.update { current ->
+                    current.copy(
+                        connectionUsername = connectionUsername,
+                        connectionAuthMode = try { AuthMode.valueOf(connectionAuthMode) } catch (_: Exception) { AuthMode.TOKEN },
+                        hiddenToolNames = hiddenToolNames,
+                        customTools = customTools,
+                        selectedModel = selectedModel
+                    )
+                }
+            }.collect {}
         }
         viewModelScope.launch {
-            settingsRepository.themeMode.collect { value ->
-                _uiState.update { it.copy(themeMode = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.showTimestamps.collect { value ->
-                _uiState.update { it.copy(showTimestamps = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.autoExpandReasoning.collect { value ->
-                _uiState.update { it.copy(autoExpandReasoning = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.autoExpandTools.collect { value ->
-                _uiState.update { it.copy(autoExpandTools = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.connectionIp.collect { value ->
-                _uiState.update { it.copy(connectionIp = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.connectionPort.collect { value ->
-                _uiState.update { it.copy(connectionPort = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.connectionToken.collect { value ->
-                _uiState.update { it.copy(connectionToken = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.connectionUsername.collect { value ->
-                _uiState.update { it.copy(connectionUsername = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.connectionAuthMode.collect { value ->
-                val mode = try { AuthMode.valueOf(value) } catch (_: Exception) { AuthMode.TOKEN }
-                _uiState.update { it.copy(connectionAuthMode = mode) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.connectionProfiles.collect { value ->
-                _uiState.update { it.copy(connectionProfiles = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.hiddenToolNames.collect { value ->
-                _uiState.update { it.copy(hiddenToolNames = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.customTools.collect { value ->
-                _uiState.update { it.copy(customTools = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.selectedModel.collect { value ->
-                _uiState.update { it.copy(selectedModel = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.activeThemeId.collect { value ->
-                _uiState.update { it.copy(activeThemeId = value) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.fontPresetId.collect { value ->
-                _uiState.update { it.copy(fontPresetId = value) }
-            }
+            combine(
+                settingsRepository.activeThemeId,
+                settingsRepository.fontPresetId,
+                settingsRepository.connectionProfiles
+            ) { activeThemeId, fontPresetId, profiles ->
+                _uiState.update { current ->
+                    current.copy(
+                        activeThemeId = activeThemeId,
+                        fontPresetId = fontPresetId,
+                        connectionProfiles = profiles
+                    )
+                }
+            }.collect {}
         }
     }
 

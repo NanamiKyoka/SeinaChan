@@ -25,6 +25,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.seina.chan.data.repository.SettingsRepository
+import com.seina.chan.data.repository.ConnectionRepository
+import androidx.lifecycle.lifecycleScope
 import com.seina.chan.data.model.BUILTIN_THEMES
 import com.seina.chan.data.model.ThemeConfig
 import com.seina.chan.service.HermesConnectionService
@@ -34,11 +36,13 @@ import com.seina.chan.ui.theme.SeinaChanTheme
 import com.seina.chan.util.FileLogger
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var connectionRepository: ConnectionRepository
 
     private var connectionService: HermesConnectionService? = null
     private var serviceBound = false
@@ -117,12 +121,17 @@ class MainActivity : ComponentActivity() {
         }
         startService(intent)
 
+        lifecycleScope.launch {
+            if (connectionRepository.hasSavedConfig()) {
+                startForegroundService(Intent(this@MainActivity, HermesConnectionService::class.java))
+            }
+        }
+
         val ensureIntent = Intent(this, HermesConnectionService::class.java).apply {
             action = HermesConnectionService.ACTION_ENSURE_CONNECTION
         }
         startService(ensureIntent)
     }
-
     override fun onPause() {
         super.onPause()
         // 通知 Service 应用进入后台

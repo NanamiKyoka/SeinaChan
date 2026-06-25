@@ -11,11 +11,14 @@ import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.util.FileLogger
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
+
 
 class ConnectionRepository(
     private val wsClient: HermesWsClient,
     private val dataStore: DataStore<Preferences>,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val chatRepository: ChatRepository
 ) {
 
     val connectionState: StateFlow<ConnectionState> = wsClient.state
@@ -87,8 +90,12 @@ class ConnectionRepository(
                 fullWsUrl = "$wsBaseUrl?token=$token"
             }
 
-            val connected = wsClient.connect(fullWsUrl, null)
-            if (connected) {
+            wsClient.connect(fullWsUrl, null)
+            // Wait for connection to establish or fail
+            withTimeout(15_000L) {
+                wsClient.state.first { it == ConnectionState.Open || it is ConnectionState.Error || it is ConnectionState.Closed }
+            }
+            if (wsClient.state.value == ConnectionState.Open) {
                 wsClient.disconnect()
                 FileLogger.i("ConnectionRepository", "testConnection() succeeded, mode=$authMode")
                 Result.success("连接成功")
@@ -106,6 +113,22 @@ class ConnectionRepository(
         FileLogger.i("ConnectionRepository", "disconnect() called")
         wsClient.enableReconnect(false)
         wsClient.disconnect()
+        chatRepository.shutdown()
+    }
+
+    /**
+     * 检查是否已保存连接配置
+     */
+    suspend fun hasSavedConfig(): Boolean {
+        return try {
+            val prefs = dataStore.data.first()
+            val ip = prefs[IP_KEY]
+            val port = prefs[PORT_KEY]
+            !ip.isNullOrBlank() && !port.isNullOrBlank()
+        } catch (e: Exception) {
+            FileLogger.e("ConnectionRepository", "检查配置失败", e)
+            false
+        }
     }
 
     suspend fun saveConfig(config: ConnectionConfig) {

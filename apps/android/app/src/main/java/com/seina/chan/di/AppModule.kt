@@ -117,9 +117,10 @@ object AppModule {
     fun provideConnectionRepository(
         wsClient: HermesWsClient,
         dataStore: DataStore<Preferences>,
-        authRepository: AuthRepository
+        authRepository: AuthRepository,
+        chatRepository: ChatRepository
     ): ConnectionRepository {
-        return ConnectionRepository(wsClient, dataStore, authRepository)
+        return ConnectionRepository(wsClient, dataStore, authRepository, chatRepository)
     }
 
     @Provides

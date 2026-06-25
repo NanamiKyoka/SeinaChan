@@ -11,7 +11,7 @@ import com.seina.chan.data.local.entity.MessageEntity
 import com.seina.chan.data.local.entity.SentImageEntity
 import com.seina.chan.data.local.entity.SessionEntity
 
-@Database(entities = [SentImageEntity::class, MessageEntity::class, SessionEntity::class], version = 5, exportSchema = false)
+@Database(entities = [SentImageEntity::class, MessageEntity::class, SessionEntity::class], version = 5, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun sentImageDao(): SentImageDao
     abstract fun messageDao(): MessageDao

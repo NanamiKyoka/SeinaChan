@@ -19,6 +19,7 @@ import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.util.FileLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -846,5 +847,9 @@ class ChatRepository(
             inSampleSize *= 2
         }
         return inSampleSize
+    }
+    fun shutdown() {
+        scope.cancel()
+        FileLogger.i("ChatRepository", "Scope cancelled")
     }
 }

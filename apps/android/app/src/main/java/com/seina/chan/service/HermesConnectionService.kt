@@ -90,7 +90,7 @@ class HermesConnectionService : Service() {
                 ensureConnection()
             }
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun ensureConnection() {
