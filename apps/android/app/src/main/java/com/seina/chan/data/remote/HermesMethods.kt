@@ -24,6 +24,10 @@ object HermesMethods {
     const val SESSION_DELETE = "session.delete"
     const val MODEL_OPTIONS = "model.options"
     const val SLASH_EXEC = "slash.exec"
+
+    const val TERMINAL_READ_RESPOND = "terminal.read.respond"
+    const val PROMPT_BACKGROUND = "prompt.background"
+    const val SUBAGENT_SPAWN_REQUESTED = "subagent.spawn_requested"
 }
 
 object HermesEventTypes {

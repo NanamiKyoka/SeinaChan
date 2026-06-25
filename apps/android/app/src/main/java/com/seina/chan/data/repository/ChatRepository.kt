@@ -570,6 +570,68 @@ class ChatRepository(
                 is GatewayEvent.UnhandledEvent -> {
                     FileLogger.d("ChatRepository", "未处理事件: ${event.eventType}")
                 }
+                is GatewayEvent.SubagentStart -> {
+                    FileLogger.d("ChatRepository", "SubagentStart: id=${event.id}, goal=${event.goal}")
+                    val sysMsg = ChatMessage(
+                        id = java.util.UUID.randomUUID().toString(),
+                        role = "system",
+                        content = "🤖 子代理已启动: ${event.goal}",
+                        isStreaming = false
+                    )
+                    _messages.value += sysMsg
+                    persistMessage(sysMsg)
+                }
+                is GatewayEvent.SubagentThinking -> {
+                    FileLogger.d("ChatRepository", "SubagentThinking: id=${event.id}, thinking=${event.thinking.take(100)}")
+                }
+                is GatewayEvent.SubagentProgress -> {
+                    FileLogger.d("ChatRepository", "SubagentProgress: id=${event.id}, message=${event.message}")
+                }
+                is GatewayEvent.SubagentTool -> {
+                    FileLogger.d("ChatRepository", "SubagentTool: id=${event.id}, toolName=${event.toolName}")
+                }
+                is GatewayEvent.SubagentComplete -> {
+                    FileLogger.d("ChatRepository", "SubagentComplete: id=${event.id}, status=${event.status}, summary=${event.summary}")
+                    val sysMsg = ChatMessage(
+                        id = java.util.UUID.randomUUID().toString(),
+                        role = "system",
+                        content = "✓ 子代理完成: status=${event.status} summary=${event.summary}",
+                        isStreaming = false
+                    )
+                    _messages.value += sysMsg
+                    persistMessage(sysMsg)
+                }
+                is GatewayEvent.NotificationShow -> {
+                    FileLogger.i("ChatRepository", "NotificationShow: key=${event.key}, text=${event.text}")
+                }
+                is GatewayEvent.NotificationClear -> {
+                    FileLogger.i("ChatRepository", "NotificationClear: key=${event.key}")
+                }
+                is GatewayEvent.TerminalReadRequest -> {
+                    FileLogger.d("ChatRepository", "TerminalReadRequest: requestId=${event.requestId}")
+                }
+                is GatewayEvent.SkinChanged -> {
+                    FileLogger.i("ChatRepository", "SkinChanged: name=${event.name}")
+                }
+                is GatewayEvent.BackgroundComplete -> {
+                    FileLogger.d("ChatRepository", "BackgroundComplete: taskId=${event.taskId}")
+                    val content = if (event.text.startsWith("error:")) {
+                        "⚠️ 后台任务失败: ${event.taskId}\n${event.text.removePrefix("error:")}"
+                    } else {
+                        "📋 后台任务完成: ${event.taskId}\n${event.text}"
+                    }
+                    val sysMsg = ChatMessage(
+                        id = java.util.UUID.randomUUID().toString(),
+                        role = "system",
+                        content = content,
+                        isStreaming = false
+                    )
+                    _messages.value += sysMsg
+                    persistMessage(sysMsg)
+                }
+                is GatewayEvent.BrowserProgress -> {
+                    FileLogger.d("ChatRepository", "BrowserProgress: message=${event.message.take(100)}")
+                }
                 else -> Unit
             }
         } catch (e: Exception) {

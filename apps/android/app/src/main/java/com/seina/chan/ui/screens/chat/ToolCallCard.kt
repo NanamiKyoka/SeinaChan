@@ -1,6 +1,11 @@
 package com.seina.chan.ui.screens.chat
 
 import androidx.compose.animation.AnimatedVisibility
+
+import androidx.compose.foundation.layout.heightIn
+
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,7 +47,8 @@ import com.seina.chan.ui.theme.TextStyles
 @Composable
 fun ToolCallCard(
     toolCall: ToolCallDetail,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    progressLines: List<String> = emptyList()
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -144,6 +150,35 @@ fun ToolCallCard(
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontFamily = FontFamily.Monospace
                             )
+                        }
+                    }
+                    if (progressLines.isNotEmpty() && toolCall.name.startsWith("browser")) {
+                        Text(
+                            text = "进度:",
+                            style = TextStyles.label,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 150.dp)
+                                .padding(top = 4.dp)
+                                .background(color = MaterialTheme.colorScheme.surface, shape = AppShapes.xs)
+                                .padding(8.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.verticalScroll(rememberScrollState())
+                            ) {
+                                progressLines.forEach { line ->
+                                    Text(
+                                        text = line,
+                                        style = TextStyles.caption,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
                         }
                     }
                 }

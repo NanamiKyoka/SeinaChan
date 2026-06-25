@@ -137,6 +137,103 @@ sealed class GatewayEvent {
         val message: String
     ) : GatewayEvent()
 
+
+    // ──── P2 协议补全事件类型 ────
+
+    @Serializable
+    @SerialName(HermesEventTypes.SUBAGENT_START)
+    data class SubagentStart(
+        val id: String = "",
+        val goal: String = "",
+        @SerialName("task_index") val taskIndex: Int = 0,
+        @SerialName("task_count") val taskCount: Int = 0,
+        val model: String? = null
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.SUBAGENT_THINKING)
+    data class SubagentThinking(
+        val id: String = "",
+        val thinking: String = ""
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.SUBAGENT_PROGRESS)
+    data class SubagentProgress(
+        val id: String = "",
+        val message: String = ""
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.SUBAGENT_TOOL)
+    data class SubagentTool(
+        val id: String = "",
+        @SerialName("tool_name") val toolName: String = "",
+        @SerialName("tool_call_id") val toolCallId: String = ""
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.SUBAGENT_COMPLETE)
+    data class SubagentComplete(
+        val id: String = "",
+        val status: String = "",
+        val summary: String = "",
+        @SerialName("duration_seconds") val durationSeconds: Double? = null,
+        @SerialName("input_tokens") val inputTokens: Int? = null,
+        @SerialName("output_tokens") val outputTokens: Int? = null,
+        @SerialName("cost_usd") val costUsd: Double? = null,
+        @SerialName("files_read") val filesRead: Int? = null,
+        @SerialName("files_written") val filesWritten: Int? = null
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.NOTIFICATION_SHOW)
+    data class NotificationShow(
+        val key: String = "",
+        val text: String = "",
+        val level: String? = null,
+        val kind: String? = null,
+        @SerialName("ttl_ms") val ttlMs: Int? = null
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.NOTIFICATION_CLEAR)
+    data class NotificationClear(
+        val key: String = ""
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.TERMINAL_READ_REQUEST)
+    data class TerminalReadRequest(
+        @SerialName("request_id") val requestId: String = "",
+        val prompt: String? = null,
+        val start: Int? = null,
+        val count: Int? = null
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.SKIN_CHANGED)
+    data class SkinChanged(
+        val name: String? = null,
+        val colors: Map<String, String>? = null,
+        val branding: Map<String, String>? = null
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.BACKGROUND_COMPLETE)
+    data class BackgroundComplete(
+        @SerialName("task_id") val taskId: String = "",
+        val text: String = ""
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.BROWSER_PROGRESS)
+    data class BrowserProgress(
+        @SerialName("tool_call_id") val toolCallId: String? = null,
+        val message: String = "",
+        val level: String? = null
+    ) : GatewayEvent()
+
     @Serializable
     @SerialName("__unknown__")
     data class UnknownEvent(val type: String = "") : GatewayEvent()
@@ -183,20 +280,21 @@ object GatewayEventSerializer : JsonContentPolymorphicSerializer<GatewayEvent>(G
             HermesEventTypes.REVIEW_SUMMARY -> GatewayEvent.ReviewSummary.serializer()
             HermesEventTypes.ERROR -> GatewayEvent.ErrorEvent.serializer()
             HermesEventTypes.STATUS_UPDATE -> GatewayEvent.StatusUpdate.serializer()
-            // 以下事件类型仅记录，不进行业务处理
-            HermesEventTypes.NOTIFICATION_SHOW,
-            HermesEventTypes.NOTIFICATION_CLEAR,
-            HermesEventTypes.BACKGROUND_COMPLETE,
-            HermesEventTypes.SKIN_CHANGED,
-            HermesEventTypes.SUBAGENT_START,
-            HermesEventTypes.SUBAGENT_THINKING,
-            HermesEventTypes.SUBAGENT_PROGRESS,
-            HermesEventTypes.SUBAGENT_TOOL,
-            HermesEventTypes.SUBAGENT_COMPLETE,
+            // ──── P2 协议补全：新事件路由到具体类型 ────
+            HermesEventTypes.SUBAGENT_START -> GatewayEvent.SubagentStart.serializer()
+            HermesEventTypes.SUBAGENT_THINKING -> GatewayEvent.SubagentThinking.serializer()
+            HermesEventTypes.SUBAGENT_PROGRESS -> GatewayEvent.SubagentProgress.serializer()
+            HermesEventTypes.SUBAGENT_TOOL -> GatewayEvent.SubagentTool.serializer()
+            HermesEventTypes.SUBAGENT_COMPLETE -> GatewayEvent.SubagentComplete.serializer()
+            HermesEventTypes.NOTIFICATION_SHOW -> GatewayEvent.NotificationShow.serializer()
+            HermesEventTypes.NOTIFICATION_CLEAR -> GatewayEvent.NotificationClear.serializer()
+            HermesEventTypes.TERMINAL_READ_REQUEST -> GatewayEvent.TerminalReadRequest.serializer()
+            HermesEventTypes.SKIN_CHANGED -> GatewayEvent.SkinChanged.serializer()
+            HermesEventTypes.BACKGROUND_COMPLETE -> GatewayEvent.BackgroundComplete.serializer()
+            HermesEventTypes.BROWSER_PROGRESS -> GatewayEvent.BrowserProgress.serializer()
+            // Voice 模式暂缓，仍映射为 UnhandledEvent
             HermesEventTypes.VOICE_TRANSCRIPT,
-            HermesEventTypes.VOICE_STATUS,
-            HermesEventTypes.BROWSER_PROGRESS,
-            HermesEventTypes.TERMINAL_READ_REQUEST -> GatewayEvent.UnhandledEvent.serializer()
+            HermesEventTypes.VOICE_STATUS -> GatewayEvent.UnhandledEvent.serializer()
             else -> {
                 FileLogger.w("GatewayEventSerializer", "未知事件类型: $eventType")
                 GatewayEvent.UnknownEvent.serializer()
