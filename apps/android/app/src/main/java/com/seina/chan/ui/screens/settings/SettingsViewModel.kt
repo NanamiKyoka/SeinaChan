@@ -1,5 +1,6 @@
 package com.seina.chan.ui.screens.settings
 
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.seina.chan.data.model.ConnectionConfig
@@ -30,6 +31,7 @@ data class ModelOption(
     val modelId: String
 )
 
+@Stable
 data class SettingsUiState(
     val pageSize: Int = 20,
     val showToolCalls: Boolean = true,

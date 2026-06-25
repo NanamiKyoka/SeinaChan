@@ -18,8 +18,10 @@ import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.util.FileLogger
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -44,6 +46,7 @@ class HermesConnectionService : Service() {
     private var stateCollectJob: Job? = null
     private var eventsCollectJob: Job? = null
     private var wakeLock: android.os.PowerManager.WakeLock? = null
+    private var lastDeltaTime = 0L
 
     inner class LocalBinder : Binder() {
         fun getService(): HermesConnectionService = this@HermesConnectionService
@@ -62,8 +65,8 @@ class HermesConnectionService : Service() {
             "SeinaChan:WebSocket"
         ).apply {
             setReferenceCounted(false)
-            acquire()
         }
+        startStreamingWakeLockDetector()
     }
 
     override fun onBind(intent: Intent): IBinder = binder
@@ -128,6 +131,29 @@ class HermesConnectionService : Service() {
                     }
                 }
             }.launchIn(scope)
+        }
+    }
+
+    private fun startStreamingWakeLockDetector() {
+        scope.launch {
+            wsClient.events.collect { event ->
+                if (event is GatewayEvent.MessageDelta) {
+                    lastDeltaTime = System.currentTimeMillis()
+                    if (wakeLock?.isHeld != true) {
+                        wakeLock?.acquire(60_000)
+                    }
+                }
+            }
+        }
+        scope.launch {
+            while (true) {
+                delay(15_000)
+                if (wakeLock?.isHeld == true && lastDeltaTime > 0 &&
+                    System.currentTimeMillis() - lastDeltaTime > 30_000) {
+                    wakeLock?.release()
+                    lastDeltaTime = 0L
+                }
+            }
         }
     }
 

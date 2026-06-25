@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -226,12 +227,11 @@ fun SessionListScreen(
                         contentPadding = PaddingValues(vertical = Spacing.sm),
                         verticalArrangement = Arrangement.spacedBy(Spacing.xs)
                     ) {
-                        items(sessions.size) { index ->
-                            val session = sessions[index]
+                        items(sessions, key = { it.id }) { session ->
                             SessionListItem(
                                 session = session,
                                 isSelected = session.id == selectedSessionId,
-                                isLast = index == sessions.lastIndex,
+                                isLast = session == sessions.last(),
                                 onClick = { viewModel.selectSession(session.id) },
                                 onRename = {
                                     renameSession = session

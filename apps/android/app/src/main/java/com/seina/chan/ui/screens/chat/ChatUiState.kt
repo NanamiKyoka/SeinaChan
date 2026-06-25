@@ -1,8 +1,10 @@
 package com.seina.chan.ui.screens.chat
 
 import android.net.Uri
+import androidx.compose.runtime.Stable
 import com.seina.chan.data.model.ChatMessage
 
+@Stable
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val isLoading: Boolean = false,

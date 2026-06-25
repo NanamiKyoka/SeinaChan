@@ -1,5 +1,6 @@
 package com.seina.chan.ui.screens.connect
 
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.seina.chan.data.model.ConnectionConfig
@@ -33,6 +34,7 @@ class ConnectViewModel @Inject constructor(
     private val connectionRepository: ConnectionRepository,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
+    @Stable
     data class ConnectUiState(
         val ip: String = "",
         val port: String = "9119",

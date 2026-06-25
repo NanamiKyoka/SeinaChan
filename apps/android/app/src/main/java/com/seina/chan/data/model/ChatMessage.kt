@@ -1,7 +1,9 @@
 package com.seina.chan.data.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 @Serializable
 data class ChatMessage(
     val id: String,

@@ -1,5 +1,6 @@
 package com.seina.chan.data.model
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -10,6 +11,7 @@ import kotlinx.serialization.Serializable
  * 主题配置，以 token 名 → ARGB 色值的形式存储颜色。
  * 亮/暗色各自独立配置，互不依赖。
  */
+@Immutable
 @Serializable
 data class ThemeConfig(
     val id: String,
