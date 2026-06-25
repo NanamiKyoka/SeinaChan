@@ -1,9 +1,13 @@
 package com.seina.chan.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "messages")
+@Entity(
+    tableName = "messages",
+    indices = [Index("sessionId"), Index("createdAt")]
+)
 data class MessageEntity(
     @PrimaryKey
     val id: String,

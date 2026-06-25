@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
@@ -133,23 +134,27 @@ class ChatRepository(
             copyImageToPrivateDir(imageUri, contentResolver)
         }
 
-        // 读取图片并转为 base64（大图片自动压缩，非 JPEG 小图片转为 JPEG）
+        // 读取图片并子采样解码为 base64（避免一次性 readBytes 占用大块内存）
         val (base64Data, mimeType) = withContext(Dispatchers.IO) {
-            contentResolver.openInputStream(imageUri)?.use { inputStream ->
-                val bytes = inputStream.readBytes()
-                if (bytes.size <= 1_048_576) {
-                    // 小图片：检测 MIME 类型，非 JPEG 则转为 JPEG
-                    val detectedMime = contentResolver.getType(imageUri) ?: "image/jpeg"
-                    if (detectedMime == "image/jpeg" || detectedMime == "image/jpg") {
-                        Pair(Base64.encodeToString(bytes, Base64.NO_WRAP), "image/jpeg")
-                    } else {
-                        // PNG/WebP 等格式转为 JPEG
-                        Pair(compressImage(bytes), "image/jpeg")
-                    }
-                } else {
-                    // 大图片压缩
-                    Pair(compressImage(bytes), "image/jpeg")
-                }
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            contentResolver.openInputStream(imageUri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, bounds)
+            }
+
+            val targetSize = 2048
+            var sampleSize = 1
+            while (bounds.outWidth / sampleSize > targetSize || bounds.outHeight / sampleSize > targetSize) {
+                sampleSize *= 2
+            }
+
+            contentResolver.openInputStream(imageUri)?.use { stream ->
+                val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                val bitmap = BitmapFactory.decodeStream(stream, null, opts)
+                    ?: throw IllegalArgumentException("无法解码图片")
+                val baos = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, baos)
+                bitmap.recycle()
+                Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP) to "image/jpeg"
             } ?: throw IllegalArgumentException("无法读取图片")
         }
 
@@ -460,8 +465,8 @@ class ChatRepository(
                                 isStreaming = false,
                                 isReasoning = false,
                                 reasoningText = event.reasoning.ifBlank { msg.reasoningText },
-                                // 优先保留 delta 累积内容，仅在无累积内容时使用 event.text
-                                content = msg.content.ifBlank { event.text }
+                                // 优先使用服务器最终文本，仅在其为空时回退到 delta 累积内容
+                                content = event.text.ifBlank { msg.content }
                             )
                         )
                         _messages.value = messages
@@ -573,10 +578,16 @@ class ChatRepository(
     }
 
     private fun updateLastStreamingAssistantMessage(transform: (ChatMessage) -> ChatMessage) {
-        _messages.value = _messages.value.mapIndexed { index, msg ->
-            if (index == _messages.value.lastIndex && msg.isStreaming && msg.role == "assistant") {
-                transform(msg)
-            } else msg
+        _messages.update { current ->
+            if (current.isEmpty()) return@update current
+            val lastIndex = current.lastIndex
+            val last = current.last()
+            if (!last.isStreaming || last.role != "assistant") {
+                return@update current
+            }
+            current.toMutableList().apply {
+                set(lastIndex, transform(last))
+            }.toList()
         }
     }
 
@@ -586,7 +597,7 @@ class ChatRepository(
         if (index >= 0) {
             messages[index] = messages[index].copy(toolCalls = messages[index].toolCalls + toolCall)
             _messages.value = messages
-            persistMessage(messages[index])
+            // streaming 期间不落库，由 MessageComplete 统一持久化
         }
     }
 
@@ -595,7 +606,8 @@ class ChatRepository(
             val updated = msg.copy(toolCalls = msg.toolCalls.map {
                 if (it.id == id) transform(it) else it
             })
-            if (updated.toolCalls != msg.toolCalls) {
+            // 仅在消息非 streaming 时落库；streaming 期间由 MessageComplete 统一持久化
+            if (!msg.isStreaming && updated.toolCalls != msg.toolCalls) {
                 persistMessage(updated)
             }
             updated

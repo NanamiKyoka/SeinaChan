@@ -17,8 +17,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
@@ -50,6 +54,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.seina.chan.R
 
 
 private sealed class MarkdownSegment {
@@ -73,6 +79,7 @@ private sealed class InlineSpan {
 
 private val codeBlockPattern = Regex("""```([a-zA-Z0-9+-_]*)[ \t]*\n([\s\S]*?)```""")
 private val linkPattern = Regex("""\[([^\]]+)\]\(([^)]+)\)""")
+private const val MAX_INLINE_PARSE_LENGTH = 50_000
 
 
 private fun parseMarkdown(content: String): List<MarkdownSegment> {
@@ -443,10 +450,13 @@ fun MarkdownText(
     color: Color = MaterialTheme.colorScheme.onBackground,
     modifier: Modifier = Modifier
 ) {
-    val segments = remember(content) { parseMarkdown(content) }
+    var showFull by remember(content) { mutableStateOf(false) }
+    val isTruncated = content.length > MAX_INLINE_PARSE_LENGTH && !showFull
+    val effectiveContent = if (isTruncated) content.take(MAX_INLINE_PARSE_LENGTH) else content
+    val segments = remember(effectiveContent) { parseMarkdown(effectiveContent) }
 
     if (segments.isEmpty()) {
-        Text(text = content, style = style, color = color, modifier = modifier)
+        Text(text = effectiveContent, style = style, color = color, modifier = modifier)
         return
     }
 
@@ -481,6 +491,11 @@ fun MarkdownText(
                 is MarkdownSegment.TaskItem -> TaskListView(segment)
             }
         }
+        if (isTruncated) {
+            TextButton(onClick = { showFull = true }) {
+                Text("显示全部（剩余 ${content.length - MAX_INLINE_PARSE_LENGTH} 字符）")
+            }
+        }
     }
 }
 
@@ -506,19 +521,21 @@ private fun CodeBlockView(codeBlock: MarkdownSegment.CodeBlock) {
             val highlighted = remember(codeBlock.code, codeBlock.language) {
                 CodeHighlighter.highlight(codeBlock.code, codeBlock.language)
             }
+            val codeScrollState = rememberScrollState()
             Text(
                 text = highlighted,
                 style = TextStyles.code,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.horizontalScroll(codeScrollState)
             )
         }
         val context = LocalContext.current
+        val copiedText = stringResource(R.string.copied)
         IconButton(
             onClick = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val clip = ClipData.newPlainText("code", codeBlock.code)
                 clipboard.setPrimaryClip(clip)
-                Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, copiedText, Toast.LENGTH_SHORT).show()
             },
             modifier = Modifier.align(Alignment.TopEnd)
         ) {

@@ -6,6 +6,10 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
+import coil.ImageLoader
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
+import coil.request.CachePolicy
 import com.seina.chan.data.local.AppDatabase
 import com.seina.chan.data.local.dao.MessageDao
 import com.seina.chan.data.local.dao.SentImageDao
@@ -79,6 +83,25 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideImageLoader(@ApplicationContext context: Context): ImageLoader {
+        return ImageLoader.Builder(context)
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .memoryCache {
+                MemoryCache.Builder(context).maxSizePercent(0.25).build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(context.cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(250L * 1024 * 1024)
+                    .build()
+            }
+            .crossfade(true)
+            .build()
+    }
+
+    @Provides
+    @Singleton
     fun provideHermesWsClient(@Named("ws") client: HttpClient, json: Json, networkMonitor: NetworkMonitor): HermesWsClient {
         return HermesWsClient(client, json, networkMonitor)
     }
@@ -106,7 +129,7 @@ object AppModule {
             context,
             AppDatabase::class.java,
             "seina_chan_db"
-        ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
+        ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5)
             .build()
     }
 

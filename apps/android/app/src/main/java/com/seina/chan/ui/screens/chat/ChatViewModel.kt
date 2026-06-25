@@ -63,6 +63,8 @@ class ChatViewModel @Inject constructor(
         set(value) {
             field = value
             ServiceSessionTracker.setSessionId(value)
+            // 同步到 SessionRepository，用于删除当前会话时通知本 ViewModel 清空
+            sessionRepository.setCurrentSessionId(value.ifEmpty { null })
         }
     private var currentWsSessionId: String = ""
 
@@ -85,6 +87,16 @@ class ChatViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 FileLogger.w("ChatViewModel", "Failed to load last dbSessionId: ${e.message}")
+            }
+        }
+        // 监听当前活跃会话被删除事件：抽屉中删除当前会话时立即清空 ChatScreen 消息缓存
+        viewModelScope.launch {
+            sessionRepository.currentSessionDeleted.collect { deletedId ->
+                FileLogger.i("ChatViewModel", "Current session deleted by user: $deletedId, clearing chat state")
+                chatRepository.clearMessages()
+                currentWsSessionId = ""
+                lastLoadedSessionId = ""
+                currentDbSessionId = ""
             }
         }
         viewModelScope.launch {
@@ -111,6 +123,7 @@ class ChatViewModel @Inject constructor(
                         rpcResumeMessages = currentDbSessionId to messages
                         chatRepository.finalizeAllStreamingMessages()
                         chatRepository.setMessages(messages)  // 用服务器消息覆盖本地缓存
+                        lastLoadedSessionId = ""
                         FileLogger.i("ChatViewModel", "Auto-resume after reconnect succeeded, sid=$sid")
                     } catch (e: Exception) {
                         FileLogger.w("ChatViewModel", "Auto-resume after reconnect failed: ${e.message}")
@@ -136,6 +149,7 @@ class ChatViewModel @Inject constructor(
                     rpcResumeMessages = currentDbSessionId to messages
                     chatRepository.finalizeAllStreamingMessages()
                     chatRepository.setMessages(messages)  // 用服务器消息覆盖本地缓存
+                    lastLoadedSessionId = ""
                     FileLogger.i("ChatViewModel", "Immediate resume after recreation succeeded, sid=$sid")
                 } catch (e: Exception) {
                     FileLogger.w("ChatViewModel", "Immediate resume after recreation failed: ${e.message}")
@@ -592,14 +606,15 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun loadMessages(dbSessionId: String) {
-        FileLogger.i("ChatViewModel", "loadMessages() dbSessionId=$dbSessionId")
+    fun loadMessages(dbSessionId: String, forceRefresh: Boolean = false) {
+        FileLogger.i("ChatViewModel", "loadMessages() dbSessionId=$dbSessionId, forceRefresh=$forceRefresh")
         if (dbSessionId.isEmpty()) {
             _inputState.update { it.copy(error = "sessionId is empty, cannot load messages") }
             return
         }
         // 同一会话已加载过 → 跳过，防止 ChatScreen recompose 时用服务端/缓存数据覆盖实时流式消息
-        if (lastLoadedSessionId == dbSessionId) {
+        // forceRefresh=true 时跳过此检查（下拉刷新场景）
+        if (!forceRefresh && lastLoadedSessionId == dbSessionId) {
             FileLogger.i("ChatViewModel", "loadMessages() skipped: already loaded for dbSessionId=$dbSessionId")
             return
         }
@@ -653,51 +668,39 @@ class ChatViewModel @Inject constructor(
 
     fun getCurrentDbSessionId(): String = currentDbSessionId
 
-    fun respondApproval(requestId: String, approved: Boolean, allowPermanent: Boolean = false) {
+    suspend fun respondApproval(requestId: String, approved: Boolean, allowPermanent: Boolean = false): Result<Unit> {
         FileLogger.i("ChatViewModel", "respondApproval() requestId=$requestId, approved=$approved, allowPermanent=$allowPermanent")
-        viewModelScope.launch {
-            try {
-                chatRepository.respondApproval(requestId, approved, allowPermanent)
-            } catch (e: Exception) {
-                FileLogger.e("ChatViewModel", "respondApproval() failed", e)
-                _inputState.update { it.copy(error = e.message) }
-            }
+        return runCatching {
+            chatRepository.respondApproval(requestId, approved, allowPermanent)
+        }.onFailure { e ->
+            FileLogger.e("ChatViewModel", "respondApproval() failed", e)
         }
     }
 
-    fun respondClarify(requestId: String, response: String) {
+    suspend fun respondClarify(requestId: String, response: String): Result<Unit> {
         FileLogger.i("ChatViewModel", "respondClarify() requestId=$requestId")
-        viewModelScope.launch {
-            try {
-                chatRepository.respondClarify(requestId, response)
-            } catch (e: Exception) {
-                FileLogger.e("ChatViewModel", "respondClarify() failed", e)
-                _inputState.update { it.copy(error = e.message) }
-            }
+        return runCatching {
+            chatRepository.respondClarify(requestId, response)
+        }.onFailure { e ->
+            FileLogger.e("ChatViewModel", "respondClarify() failed", e)
         }
     }
 
-    fun respondSecret(requestId: String, secret: String) {
+    suspend fun respondSecret(requestId: String, secret: String): Result<Unit> {
         FileLogger.i("ChatViewModel", "respondSecret() requestId=$requestId")
-        viewModelScope.launch {
-            try {
-                chatRepository.respondSecret(requestId, secret)
-            } catch (e: Exception) {
-                FileLogger.e("ChatViewModel", "respondSecret() failed", e)
-                _inputState.update { it.copy(error = e.message) }
-            }
+        return runCatching {
+            chatRepository.respondSecret(requestId, secret)
+        }.onFailure { e ->
+            FileLogger.e("ChatViewModel", "respondSecret() failed", e)
         }
     }
 
-    fun respondSudo(requestId: String, password: String) {
+    suspend fun respondSudo(requestId: String, password: String): Result<Unit> {
         FileLogger.i("ChatViewModel", "respondSudo() requestId=$requestId")
-        viewModelScope.launch {
-            try {
-                chatRepository.respondSudo(requestId, password)
-            } catch (e: Exception) {
-                FileLogger.e("ChatViewModel", "respondSudo() failed", e)
-                _inputState.update { it.copy(error = e.message) }
-            }
+        return runCatching {
+            chatRepository.respondSudo(requestId, password)
+        }.onFailure { e ->
+            FileLogger.e("ChatViewModel", "respondSudo() failed", e)
         }
     }
 

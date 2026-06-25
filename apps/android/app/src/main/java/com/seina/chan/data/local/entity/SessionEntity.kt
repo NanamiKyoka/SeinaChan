@@ -1,10 +1,14 @@
 package com.seina.chan.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.seina.chan.data.model.Session
 
-@Entity(tableName = "sessions")
+@Entity(
+    tableName = "sessions",
+    indices = [Index("lastActiveAt")]
+)
 data class SessionEntity(
     @PrimaryKey
     val id: String,

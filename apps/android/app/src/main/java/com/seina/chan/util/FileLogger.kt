@@ -5,7 +5,6 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileWriter
@@ -13,7 +12,8 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 
 /**
  * 日志上下文，用于追踪当前会话。
@@ -34,6 +34,7 @@ object FileLogger {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
     private const val MAX_FILE_SIZE = 5L * 1024 * 1024
+    private const val MAX_QUEUE_SIZE = 10_000
 
     private data class LogEntry(
         val level: String,
@@ -44,7 +45,7 @@ object FileLogger {
         val throwable: Throwable? = null
     )
 
-    private val logQueue = ConcurrentLinkedQueue<LogEntry>()
+    private val logQueue = LinkedBlockingQueue<LogEntry>(MAX_QUEUE_SIZE)
     private val writerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     init {
@@ -55,15 +56,21 @@ object FileLogger {
         writerScope.launch {
             while (true) {
                 val entries = mutableListOf<LogEntry>()
-                while (true) {
-                    val entry = logQueue.poll() ?: break
-                    entries.add(entry)
-                    if (entries.size >= 10) break
+                val first = try {
+                    logQueue.poll(200, TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    null
+                }
+                if (first != null) {
+                    entries.add(first)
+                    while (entries.size < 10) {
+                        val entry = logQueue.poll() ?: break
+                        entries.add(entry)
+                    }
                 }
                 if (entries.isNotEmpty()) {
                     writeBatch(entries)
                 }
-                delay(200)
             }
         }
     }
@@ -165,16 +172,17 @@ object FileLogger {
     }
 
     private fun write(level: String, tag: String, message: String, throwable: Throwable? = null) {
-        logQueue.add(
-            LogEntry(
-                level = level,
-                tag = tag,
-                message = message,
-                sessionId = LogContext.sessionId,
-                timestamp = System.currentTimeMillis(),
-                throwable = throwable
-            )
+        val entry = LogEntry(
+            level = level,
+            tag = tag,
+            message = message,
+            sessionId = LogContext.sessionId,
+            timestamp = System.currentTimeMillis(),
+            throwable = throwable
         )
+        while (!logQueue.offer(entry)) {
+            logQueue.poll()
+        }
     }
 
     fun v(tag: String, message: String) = write("VERBOSE", tag, message)
@@ -183,4 +191,19 @@ object FileLogger {
     fun w(tag: String, message: String) = write("WARN", tag, message)
     fun w(tag: String, message: String, throwable: Throwable) = write("WARN", tag, message, throwable)
     fun e(tag: String, message: String, throwable: Throwable? = null) = write("ERROR", tag, message, throwable)
+
+    fun flush() {
+        try {
+            val entries = mutableListOf<LogEntry>()
+            while (true) {
+                val e = logQueue.poll() ?: break
+                entries.add(e)
+            }
+            if (entries.isNotEmpty()) {
+                writeBatch(entries)
+            }
+        } catch (_: Throwable) {
+            // flush 期间不能再抛异常，否则二次崩溃
+        }
+    }
 }

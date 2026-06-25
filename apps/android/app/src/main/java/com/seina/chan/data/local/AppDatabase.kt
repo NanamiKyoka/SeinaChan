@@ -11,7 +11,7 @@ import com.seina.chan.data.local.entity.MessageEntity
 import com.seina.chan.data.local.entity.SentImageEntity
 import com.seina.chan.data.local.entity.SessionEntity
 
-@Database(entities = [SentImageEntity::class, MessageEntity::class, SessionEntity::class], version = 4, exportSchema = false)
+@Database(entities = [SentImageEntity::class, MessageEntity::class, SessionEntity::class], version = 5, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun sentImageDao(): SentImageDao
     abstract fun messageDao(): MessageDao
@@ -56,6 +56,14 @@ abstract class AppDatabase : RoomDatabase() {
                         `lastActiveAt` TEXT
                     )
                 """)
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_messages_sessionId ON messages(sessionId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_messages_createdAt ON messages(createdAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sessions_lastActiveAt ON sessions(lastActiveAt)")
             }
         }
     }

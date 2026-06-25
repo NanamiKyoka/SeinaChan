@@ -9,6 +9,7 @@ class UncaughtExceptionHandler : Thread.UncaughtExceptionHandler {
             "FATAL: ${throwable.javaClass.name}: ${throwable.message}",
             throwable
         )
+        FileLogger.flush()
         defaultHandler?.uncaughtException(thread, throwable)
     }
 }
