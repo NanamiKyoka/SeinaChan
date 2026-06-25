@@ -24,6 +24,8 @@ import com.seina.chan.data.remote.GatewayEvent.ApprovalRequest
 import com.seina.chan.ui.components.SeinaButton
 import com.seina.chan.ui.components.SeinaButtonVariant
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.res.stringResource
+import com.seina.chan.R
 import com.seina.chan.ui.theme.AppShapes
 import com.seina.chan.ui.theme.Spacing
 import com.seina.chan.ui.theme.TextStyles
@@ -33,7 +35,8 @@ fun ApprovalDialog(
     request: ApprovalRequest?,
     onApprove: (Boolean) -> Unit,
     onReject: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    error: String? = null
 ) {
     if (request == null) return
     var allowPermanent by remember { mutableStateOf(false) }
@@ -93,6 +96,17 @@ fun ApprovalDialog(
             }
 
             Spacer(modifier = Modifier.height(Spacing.md))
+
+            error?.let { err ->
+                Text(
+                    text = err,
+                    color = MaterialTheme.colorScheme.error,
+                    style = TextStyles.bodySm,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = Spacing.sm)
+                )
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth()

@@ -27,6 +27,8 @@ import com.seina.chan.ui.components.SeinaButton
 import com.seina.chan.ui.components.SeinaButtonVariant
 import com.seina.chan.ui.components.SeinaTextField
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.res.stringResource
+import com.seina.chan.R
 import com.seina.chan.ui.theme.AppShapes
 import com.seina.chan.ui.theme.Spacing
 import com.seina.chan.ui.theme.TextStyles
@@ -35,7 +37,8 @@ import com.seina.chan.ui.theme.TextStyles
 fun SudoDialog(
     request: SudoRequest?,
     onRespond: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    error: String? = null
 ) {
     if (request == null) return
 
@@ -84,11 +87,22 @@ fun SudoDialog(
 
             Spacer(modifier = Modifier.height(Spacing.md))
 
+            error?.let { err ->
+                Text(
+                    text = err,
+                    color = MaterialTheme.colorScheme.error,
+                    style = TextStyles.bodySm,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = Spacing.sm)
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 SeinaButton(
-                    text = "取消",
+                    text = stringResource(R.string.cancel),
                     onClick = onDismiss,
                     variant = SeinaButtonVariant.Secondary,
                     modifier = Modifier.weight(1f)
@@ -97,7 +111,7 @@ fun SudoDialog(
                 Spacer(modifier = Modifier.width(Spacing.md))
 
                 SeinaButton(
-                    text = "确认",
+                    text = stringResource(R.string.confirm),
                     onClick = {
                         onRespond(password)
                     },

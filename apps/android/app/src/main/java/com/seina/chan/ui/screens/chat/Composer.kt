@@ -51,9 +51,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.seina.chan.R
 import com.seina.chan.data.model.ChatMessage
 import com.seina.chan.data.model.SlashCommand
 import com.seina.chan.ui.theme.AppShapes
@@ -124,18 +126,19 @@ fun Composer(
                                 ),
                             contentScale = ContentScale.Crop
                         )
-                        IconButton(
-                            onClick = { onRemoveImage(uri) },
+                        Box(
                             modifier = Modifier
-                                .size(20.dp)
+                                .size(48.dp)
                                 .align(Alignment.TopEnd)
-                                .padding(2.dp)
+                                .clickable { onRemoveImage(uri) },
+                            contentAlignment = Alignment.TopEnd
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "移除图片",
                                 tint = Color.White,
                                 modifier = Modifier
+                                    .padding(2.dp)
                                     .size(16.dp)
                                     .background(Color.Black.copy(alpha = 0.6f), CircleShape)
                                     .padding(2.dp)
@@ -184,9 +187,11 @@ fun Composer(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            IconButton(
-                                onClick = { onRemoveFile(uri) },
-                                modifier = Modifier.size(20.dp)
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clickable { onRemoveFile(uri) },
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
@@ -343,7 +348,7 @@ fun Composer(
             ) {
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = "发送",
+                    contentDescription = stringResource(R.string.send),
                     tint = Color.White
                 )
             }

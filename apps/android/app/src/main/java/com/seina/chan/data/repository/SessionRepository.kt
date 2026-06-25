@@ -12,6 +12,12 @@ import com.seina.chan.data.model.ToolCallStatus
 import com.seina.chan.data.remote.HermesMethods
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.util.FileLogger
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.JsonElement
@@ -41,6 +47,17 @@ class SessionRepository(
     private val sentImageDao: SentImageDao,
     private val sessionDao: SessionDao
 ) {
+
+    private val _currentSessionId = MutableStateFlow<String?>(null)
+    val currentSessionId: StateFlow<String?> = _currentSessionId.asStateFlow()
+
+    private val _currentSessionDeleted = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val currentSessionDeleted: SharedFlow<String> = _currentSessionDeleted.asSharedFlow()
+
+    fun setCurrentSessionId(id: String?) {
+        _currentSessionId.value = id
+    }
+
     /**
      * 从 Room 缓存获取所有会话，用于初始快速展示。
      */
@@ -367,6 +384,11 @@ class SessionRepository(
         wsClient.request(HermesMethods.SESSION_DELETE, buildJsonObject {
             put("session_id", sessionId)
         })
+        // 删除的是当前活跃会话 → 通知 ChatViewModel 清空消息缓存
+        if (_currentSessionId.value == sessionId) {
+            _currentSessionDeleted.tryEmit(sessionId)
+            _currentSessionId.value = null
+        }
         FileLogger.i("SessionRepository", "deleteSession() succeeded")
     }
 

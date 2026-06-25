@@ -20,17 +20,24 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -69,6 +76,7 @@ import com.seina.chan.ui.theme.TextStyles
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
@@ -94,9 +102,28 @@ fun ChatScreen(
     val pendingSudo = remember { mutableStateOf<GatewayEvent.SudoRequest?>(null) }
     var previewImageUri by remember { mutableStateOf<String?>(null) }
 
+    var isRefreshing by remember { mutableStateOf(false) }
+    val pullToRefreshState = rememberPullToRefreshState()
+
     // 仅在用户处于消息列表底部时自动滚动；若用户手动上滑查看历史，则停止自动跟随
     val autoScrollEnabled by remember {
         derivedStateOf { !listState.canScrollForward }
+    }
+
+    // 用于计算未读消息数：autoScrollEnabled 时同步 lastSeenMessageCount
+    var lastSeenMessageCount by remember { mutableStateOf(uiState.messages.size) }
+    LaunchedEffect(uiState.messages.size, autoScrollEnabled) {
+        if (autoScrollEnabled) {
+            lastSeenMessageCount = uiState.messages.size
+        }
+    }
+    val unreadCount = (uiState.messages.size - lastSeenMessageCount).coerceAtLeast(0)
+
+    // 下拉刷新：loadMessages 内部启动协程并管理 isLoading，观察其完成以清除刷新指示器
+    LaunchedEffect(uiState.isLoading) {
+        if (!uiState.isLoading && isRefreshing) {
+            isRefreshing = false
+        }
     }
 
     // 新消息到达时（条数变化），仅在底部自动滚动
@@ -408,7 +435,7 @@ fun ChatScreen(
                         Text(
                             text = uiState.error ?: "",
                             style = TextStyles.bodyMd,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.error
                         )
                     } else if (uiState.isSearchMode) {
                         Text(
@@ -430,26 +457,40 @@ fun ChatScreen(
                         .fillMaxWidth()
                         .weight(1f)
                 ) {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = Spacing.md, end = 28.dp),
-                        state = listState,
-                        contentPadding = PaddingValues(bottom = 8.dp)
+                    PullToRefreshBox(
+                        isRefreshing = isRefreshing,
+                        onRefresh = {
+                            if (currentSessionId.isEmpty()) {
+                                isRefreshing = false
+                            } else {
+                                isRefreshing = true
+                                viewModel.loadMessages(currentSessionId, forceRefresh = true)
+                            }
+                        },
+                        state = pullToRefreshState,
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        items(uiState.messages, key = { it.id }) { message ->
-                            MessageBubble(
-                                message = message,
-                                showToolCalls = uiState.showToolCalls,
-                                showReasoning = uiState.showReasoning,
-                                showTimestamps = uiState.showTimestamps,
-                                hiddenToolNames = uiState.hiddenToolNames,
-                                onImageClick = { previewImageUri = it },
-                                onQuote = { viewModel.quoteMessage(it) },
-                                onResend = { viewModel.resendMessage(it) },
-                                onEdit = { viewModel.startEditingMessage(it) },
-                                onBranch = { viewModel.branchFromMessage(it.id) }
-                            )
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = Spacing.md, end = 28.dp),
+                            state = listState,
+                            contentPadding = PaddingValues(bottom = 8.dp)
+                        ) {
+                            items(uiState.messages, key = { it.id }) { message ->
+                                MessageBubble(
+                                    message = message,
+                                    showToolCalls = uiState.showToolCalls,
+                                    showReasoning = uiState.showReasoning,
+                                    showTimestamps = uiState.showTimestamps,
+                                    hiddenToolNames = uiState.hiddenToolNames,
+                                    onImageClick = { previewImageUri = it },
+                                    onQuote = { viewModel.quoteMessage(it) },
+                                    onResend = { viewModel.resendMessage(it) },
+                                    onEdit = { viewModel.startEditingMessage(it) },
+                                    onBranch = { viewModel.branchFromMessage(it.id) }
+                                )
+                            }
                         }
                     }
 
@@ -460,6 +501,36 @@ fun ChatScreen(
                             .padding(end = Spacing.xs)
                             .zIndex(1f)
                     )
+
+                    if (!autoScrollEnabled && uiState.messages.isNotEmpty()) {
+                        FloatingActionButton(
+                            onClick = {
+                                scope.launch {
+                                    if (uiState.messages.isNotEmpty()) {
+                                        listState.animateScrollToItem(uiState.messages.size - 1)
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(16.dp)
+                        ) {
+                            BadgedBox(
+                                badge = {
+                                    if (unreadCount > 0) {
+                                        Badge {
+                                            Text(if (unreadCount > 99) "99+" else unreadCount.toString())
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "滚到底部"
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -468,7 +539,7 @@ fun ChatScreen(
                     Text(
                         text = error,
                         style = TextStyles.caption,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.error,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = Spacing.md)
