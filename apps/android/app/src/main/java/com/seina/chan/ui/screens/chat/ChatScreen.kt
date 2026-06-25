@@ -102,6 +102,12 @@ fun ChatScreen(
     val pendingSudo = remember { mutableStateOf<GatewayEvent.SudoRequest?>(null) }
     var previewImageUri by remember { mutableStateOf<String?>(null) }
 
+    // 对话框 RPC 错误状态：RPC 失败时在对话框内显示 inline error，不关闭对话框
+    var approvalError by remember { mutableStateOf<String?>(null) }
+    var clarifyError by remember { mutableStateOf<String?>(null) }
+    var secretError by remember { mutableStateOf<String?>(null) }
+    var sudoError by remember { mutableStateOf<String?>(null) }
+
     var isRefreshing by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
 
@@ -204,21 +210,32 @@ fun ChatScreen(
 
     ApprovalDialog(
         request = pendingApproval.value,
+        error = approvalError,
         onApprove = { allowPermanent ->
-            pendingApproval.value?.let {
-                viewModel.respondApproval(it.id, approved = true, allowPermanent = allowPermanent)
-                pendingApproval.value = null
+            pendingApproval.value?.let { req ->
+                approvalError = null
+                scope.launch {
+                    viewModel.respondApproval(req.id, approved = true, allowPermanent = allowPermanent)
+                        .onFailure { approvalError = it.message }
+                        .onSuccess { pendingApproval.value = null }
+                }
             }
         },
         onReject = {
-            pendingApproval.value?.let {
-                viewModel.respondApproval(it.id, approved = false)
-                pendingApproval.value = null
+            pendingApproval.value?.let { req ->
+                scope.launch {
+                    viewModel.respondApproval(req.id, approved = false)
+                        .onFailure { approvalError = it.message }
+                        .onSuccess { pendingApproval.value = null }
+                }
             }
         },
         onDismiss = {
-            pendingApproval.value?.let {
-                viewModel.respondApproval(it.id, approved = false)
+            pendingApproval.value?.let { req ->
+                approvalError = null
+                scope.launch {
+                    viewModel.respondApproval(req.id, approved = false)
+                }
                 pendingApproval.value = null
             }
         }
@@ -226,15 +243,23 @@ fun ChatScreen(
 
     ClarifyDialog(
         request = pendingClarify.value,
+        error = clarifyError,
         onRespond = { response ->
-            pendingClarify.value?.let {
-                viewModel.respondClarify(it.id, response)
-                pendingClarify.value = null
+            pendingClarify.value?.let { req ->
+                clarifyError = null
+                scope.launch {
+                    viewModel.respondClarify(req.id, response)
+                        .onFailure { clarifyError = it.message }
+                        .onSuccess { pendingClarify.value = null }
+                }
             }
         },
         onDismiss = {
-            pendingClarify.value?.let {
-                viewModel.respondClarify(it.id, "")
+            pendingClarify.value?.let { req ->
+                clarifyError = null
+                scope.launch {
+                    viewModel.respondClarify(req.id, "")
+                }
                 pendingClarify.value = null
             }
         }
@@ -242,26 +267,42 @@ fun ChatScreen(
 
     SecretDialog(
         request = pendingSecret.value,
+        error = secretError,
         onRespond = { secret ->
-            pendingSecret.value?.let {
-                viewModel.respondSecret(it.id, secret)
-                pendingSecret.value = null
+            pendingSecret.value?.let { req ->
+                secretError = null
+                scope.launch {
+                    viewModel.respondSecret(req.id, secret)
+                        .onFailure { secretError = it.message }
+                        .onSuccess { pendingSecret.value = null }
+                }
             }
         },
-        onDismiss = { pendingSecret.value = null }
+        onDismiss = {
+            secretError = null
+            pendingSecret.value = null
+        }
     )
 
     SudoDialog(
         request = pendingSudo.value,
+        error = sudoError,
         onRespond = { password ->
-            pendingSudo.value?.let {
-                viewModel.respondSudo(it.id, password)
-                pendingSudo.value = null
+            pendingSudo.value?.let { req ->
+                sudoError = null
+                scope.launch {
+                    viewModel.respondSudo(req.id, password)
+                        .onFailure { sudoError = it.message }
+                        .onSuccess { pendingSudo.value = null }
+                }
             }
         },
         onDismiss = {
-            pendingSudo.value?.let {
-                viewModel.respondSudo(it.id, "")
+            pendingSudo.value?.let { req ->
+                sudoError = null
+                scope.launch {
+                    viewModel.respondSudo(req.id, "")
+                }
                 pendingSudo.value = null
             }
         }
